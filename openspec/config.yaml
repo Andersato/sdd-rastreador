@@ -1,0 +1,39 @@
+schema: spec-driven
+
+context: |
+  Proyecto: web que recoge a diario los precios de las gasolineras de España,
+  construye un histórico propio y lo muestra con mapas y gráficos. Creado para
+  aprender SDD con OpenSpec y a trabajar con datos reales.
+  Stack: Python + FastAPI, SQLite. Frontend en HTML + JavaScript con Leaflet
+  (mapas) y Chart.js (gráficos).
+  Tests: pytest para unitarios y de API, Playwright para funcionales.
+  Arquitectura: la ingesta (descarga, limpieza y guardado de precios) va en
+  src/ingestion/, sin dependencias de la API web ni de la interfaz. Los
+  endpoints van en src/api/ y la interfaz en web/.
+  Fuente de datos: API REST oficial del Ministerio (EstacionesTerrestres).
+  Solo da precios actuales; el histórico lo construimos guardando capturas con
+  fecha y hora. Devuelve precios y coordenadas como texto con coma decimal, y
+  un precio vacío significa que la estación no vende ese combustible.
+  Atribución obligatoria: "Ministerio de Industria, Comercio y Turismo -
+  Precios de carburantes en estaciones de servicio".
+  Idioma: specs y documentación en español; código y nombres en inglés.
+
+rules:
+  proposal:
+    - Mantén el alcance pequeño; si el cambio crece, propón dividirlo.
+    - Indica explícitamente qué queda fuera del alcance.
+    - Si el cambio afecta a datos ya guardados, indícalo y explica cómo se
+      preservan.
+  specs:
+    - Cada requisito debe tener al menos un escenario WHEN/THEN verificable.
+    - Incluye escenarios de error y casos límite, no solo el caso feliz.
+    - Usa datos de ejemplo concretos (precios, fechas, coordenadas) en los
+      escenarios.
+    - Cubre los fallos de la fuente de datos (API caída, respuesta vacía o
+      incompleta, campos con formato inesperado).
+  design:
+    - Si el cambio modifica el modelo de datos, describe la migración y cómo
+      se conserva el histórico existente.
+  tasks:
+    - Incluye tareas de tests unitarios y funcionales.
+    - Los tests usan respuestas guardadas en tests/fixtures/, nunca la API real.

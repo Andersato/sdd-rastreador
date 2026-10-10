@@ -1,0 +1,9 @@
+[project]
+name = "precios-gasolineras"
+version = "0.1.0"
+description = "Recogida diaria de precios de gasolineras de España e histórico propio"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

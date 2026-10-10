@@ -1,0 +1,10 @@
+# Base de datos local (histórico): nunca se sube al repo
+data/
+*.db
+*.db.tmp-*
+*.db-journal
+
+# Entorno y cachés de Python
+.venv/
+__pycache__/
+.pytest_cache/
