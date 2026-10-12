@@ -34,6 +34,7 @@ class LocalServer:
         self.routes: dict[str, Route] = {}
         self.requests: dict[str, int] = {}
         self.received_headers: dict[str, dict[str, str]] = {}
+        self._sent: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), self._make_handler())
@@ -57,6 +58,15 @@ class LocalServer:
 
     def add_fixture(self, path, fixture_name, **kwargs):
         return self.add(path, body=(FIXTURES / fixture_name).read_bytes(), **kwargs)
+
+    def sent(self, path: str) -> threading.Event:
+        """Aviso de que la respuesta de `path` se ha enviado por completo.
+
+        Se activa cuando termina el `write` del cuerpo (los datos ya están en
+        manos del sistema, no necesariamente recibidos por el cliente).
+        """
+        with self._lock:
+            return self._sent.setdefault(path, threading.Event())
 
     def count(self, path: str) -> int:
         return self.requests.get(path, 0)
@@ -119,6 +129,7 @@ class LocalServer:
                     self.close_connection = True
                     return
                 self.wfile.write(route.body)
+                server.sent(self.path).set()
                 if route.mode == TRUNCATED_LENGTH:
                     self.close_connection = True
 

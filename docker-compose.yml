@@ -1,0 +1,21 @@
+# Ingesta de precios en un contenedor. Uso (ver README):
+#   docker compose build
+#   docker compose run --rm ingest
+services:
+  ingest:
+    build: .
+    image: precios-gasolineras-ingest
+    # UID/GID del usuario del host, desde .env: los archivos de ./data quedan
+    # a su nombre también en Linux. Root (0) lo rechaza el programa de arranque.
+    user: "${HOST_UID:?falta HOST_UID en .env (ver README)}:${HOST_GID:?falta HOST_GID en .env (ver README)}"
+    # Init como proceso 1: reenvía SIGTERM/SIGINT a la ingesta.
+    init: true
+    restart: "no"
+    volumes:
+      # Sintaxis larga para que Docker no cree ./data si falta (en Linux
+      # quedaría a nombre de root).
+      - type: bind
+        source: ./data
+        target: /app/data
+        bind:
+          create_host_path: false

@@ -50,6 +50,66 @@ Para usar otro archivo de base de datos:
 
 La base de datos no se sube al repositorio (`data/` está en `.gitignore`).
 
+## Recoger los precios con Docker
+
+Así la ingesta se lanza igual en el Mac y en un Linux, sin instalar Python.
+
+### Requisitos
+
+Docker con Compose v2 (Docker Desktop u OrbStack en macOS, Docker Engine en
+Linux).
+
+### Preparar (una vez por máquina)
+
+Desde la carpeta del proyecto:
+
+```sh
+printf 'HOST_UID=%s\nHOST_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+mkdir -p data
+```
+
+- `.env` guarda tu número de usuario y de grupo. El contenedor se ejecuta con
+  ellos, así que lo que escriba en `data/` queda a tu nombre, también en
+  Linux. No se sube al repositorio. No se admite root (usuario o grupo 0).
+- `data/` tiene que existir antes de lanzar: si falta, Docker no la crea
+  (en Linux quedaría a nombre de root) y muestra
+  `bind source path does not exist: …/data`.
+- Si ya tienes `data/prices.db`, el contenedor la reutiliza y añade las
+  capturas nuevas a continuación. Antes de la primera ejecución con Docker,
+  haz una copia fuera de `data/` por si acaso:
+  `cp data/prices.db ~/prices.db.copia-$(date +%Y%m%d)`.
+
+### Construir la imagen
+
+```sh
+docker compose build
+```
+
+Repítelo **después de cada cambio del código**: `docker compose run` usa la
+imagen que ya existe y no la reconstruye por sí solo. También necesita `.env`.
+
+### Lanzar la ingesta
+
+```sh
+docker compose run --rm ingest
+```
+
+Hace lo mismo que sin Docker (una sola petición, mismo resumen) y termina con
+el mismo código de salida: 0 si se ha guardado la captura y distinto de 0 si
+ha fallado. El contenedor se borra al terminar; los datos se quedan en
+`data/prices.db`.
+
+- El resumen dice `Captura guardada en /app/data/prices.db`: es la ruta
+  dentro del contenedor, que corresponde a `data/prices.db` de tu carpeta.
+- Se pueden añadir argumentos de la ingesta, por ejemplo
+  `docker compose run --rm ingest --help`. `--db` no se admite: la base de
+  datos es siempre `data/prices.db` (cualquier otra se perdería al borrar el
+  contenedor). La ayuda muestra `--db` igualmente; ignóralo.
+- Si se corta a mitad (Ctrl+C o `docker stop`), la base queda como estaba o
+  con la captura completa, nunca a medias. Pueden quedar en `data/` archivos
+  `prices.db-journal` o `prices.db.tmp-…`: son inofensivos y la siguiente
+  ejecución los resuelve o los ignora.
+
 ## Tests
 
 ```sh
@@ -59,6 +119,18 @@ La base de datos no se sube al repositorio (`data/` está en `.gitignore`).
 Los tests nunca llaman a la API real: usan respuestas guardadas en
 `tests/fixtures/` y un servidor HTTP local. Cualquier conexión a otra máquina
 falla a propósito durante los tests.
+
+Los tests de `tests/docker/` construyen la imagen y lanzan contenedores
+(siempre contra el servidor local y con una carpeta de datos temporal). Se
+saltan solos si Docker no está disponible, y se pueden excluir con:
+
+```sh
+.venv/bin/python -m pytest -m "not docker"
+```
+
+Al ejecutarlos se reconstruye la imagen local `precios-gasolineras-ingest`
+con el código actual. Las comprobaciones que no se pueden automatizar en el
+Mac están en [docs/container-checks.md](docs/container-checks.md).
 
 ## Fuente de los datos
 

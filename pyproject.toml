@@ -7,3 +7,6 @@ requires-python = ">=3.12"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "docker: tests que construyen la imagen y lanzan contenedores (se saltan si Docker no está disponible)",
+]

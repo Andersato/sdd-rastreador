@@ -352,6 +352,23 @@ requirements-dev.txt
   → La tarea 1.1 lo comprueba. Si falla, se añade a `LocalServer` un
   parámetro opcional de dirección de escucha, que solo usan los tests de
   Docker, sin cambiar el valor por defecto.
+  - **Resultado de la tarea 1.1 (2026-10-12, OrbStack 29.4.0, Compose
+    v5.1.2):**
+    - (a) Un contenedor llega por `host.docker.internal` a un servidor del
+      Mac que escucha en `127.0.0.1`. No hace falta cambiar `LocalServer`.
+    - (b) Con `create_host_path: false` y sin `./data`, `run` termina con
+      código 1 y el mensaje «bind source path does not exist: <ruta>/data».
+      La carpeta no se crea.
+    - (c) Con `-f <ruta absoluta>` lanzado desde otra carpeta que tiene su
+      propio `.env`, Compose usa el `.env` del proyecto. Sin `.env`, falla
+      con «required variable HOST_UID is missing a value: …» y código 1.
+      Las variables del entorno sí tienen prioridad sobre `.env`
+      (`HOST_UID=0` exportado llega al contenedor), así que hace falta el
+      entorno mínimo de los tests.
+    - (d) `~/.docker/config.json` no tiene proxies en esta máquina. Se pasan
+      `NO_PROXY`/`no_proxy` igualmente.
+    - Además: `run --rm` deja creada la red `<proyecto>_default`. Los tests
+      hacen `docker compose down` al terminar cada proyecto temporal.
 - **[Compromiso] El fixture de sesión reconstruye la imagen
   `precios-gasolineras-ingest` del usuario** con el código actual.
   → Es inofensivo: es la misma imagen que daría `docker compose build`. Se

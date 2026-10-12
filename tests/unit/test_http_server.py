@@ -80,3 +80,15 @@ def test_slow_sends_byte_by_byte(http_server):
     assert resp.read(3) == b"abc"
     assert time.monotonic() - start >= 0.4
     conn.close()
+
+
+def test_sent_event_after_full_body(http_server):
+    body = b"x" * 200_000
+    http_server.add("/big", body=body)
+    sent = http_server.sent("/big")
+    assert not sent.is_set()
+    conn, resp = get(http_server, "/big")
+    assert resp.read() == body
+    conn.close()
+    assert sent.wait(timeout=5)
+    assert not http_server.sent("/other").is_set()
