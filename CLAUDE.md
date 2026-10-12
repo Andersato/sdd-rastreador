@@ -61,6 +61,8 @@ datos reales.
 - No subas la base de datos al repo (debe estar en .gitignore).
 - Sé respetuoso con la API: nada de bucles de peticiones; como mucho
   la frecuencia de recogida definida en la spec.
+- Las ejecuciones contra la API real las lanzo yo. Si una tarea necesita
+  una, dame el comando exacto y espera a que te pase el resultado.
 
 ## Documentación en Confluence
 - Espacio: "Precios de Gasolineras" (key: PG).

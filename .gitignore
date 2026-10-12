@@ -4,7 +4,12 @@ data/
 *.db.tmp-*
 *.db-journal
 
+# Configuración local de Docker (UID/GID del usuario del host)
+.env
+
 # Entorno y cachés de Python
 .venv/
 __pycache__/
 .pytest_cache/
+.idea
+.idea/
