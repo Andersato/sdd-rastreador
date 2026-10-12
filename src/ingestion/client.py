@@ -3,6 +3,7 @@
 import http.client
 import json
 import queue
+import ssl
 import threading
 from collections.abc import Callable
 from datetime import datetime, timezone
@@ -16,10 +17,29 @@ API_URL = (
     "PreciosCarburantes/EstacionesTerrestres/"
 )
 DOWNLOAD_DEADLINE_S = 120.0
+# La API solo acepta TLS 1.2 con intercambio RSA (sin ECDHE), que la lista por
+# defecto de Python no ofrece. Se añaden estos dos al final de esa lista.
+EXTRA_TLS12_CIPHERS = ("AES256-GCM-SHA384", "AES128-GCM-SHA256")
 
 
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def tls_context() -> ssl.SSLContext:
+    """Contexto TLS de la descarga: el de Python por defecto más dos cifrados.
+
+    Mantiene las autoridades de confianza, la verificación del certificado y
+    del nombre, la versión mínima y los cifrados de TLS 1.3 por defecto. La
+    lista de TLS 1.2 se toma del propio contexto (no se copia a mano) y el
+    nivel de seguridad se fija explícitamente: al menos 2, sin bajar nunca el
+    que ya tenga la máquina.
+    """
+    context = ssl.create_default_context()
+    level = max(2, context.security_level)
+    default = [c["name"] for c in context.get_ciphers() if c["protocol"] != "TLSv1.3"]
+    context.set_ciphers(":".join([f"@SECLEVEL={level}", *default, *EXTRA_TLS12_CIPHERS]))
+    return context
 
 
 def fetch_prices(
@@ -59,7 +79,8 @@ def _download(url: str, deadline_s: float) -> bytes:
     # TimeoutError heredan de OSError.
     try:
         request = Request(url, headers={"Accept": "application/json"})
-        with urlopen(request, timeout=deadline_s) as response:
+        # Contexto nuevo en cada descarga; también se usa en las redirecciones.
+        with urlopen(request, timeout=deadline_s, context=tls_context()) as response:
             if response.status != 200:
                 raise DownloadError(f"la descarga ha fallado con HTTP {response.status}")
             return response.read()

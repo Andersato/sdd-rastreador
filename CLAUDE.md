@@ -65,7 +65,7 @@ datos reales.
   una, dame el comando exacto y espera a que te pase el resultado.
 
 ## Documentación en Confluence
-- Espacio: "Precios de Gasolineras" (key: PG).
+- Espacio: "Precios de Gasolineras" (key: PDG).
 - Público: cualquier persona, aunque no sea del equipo ni programe.
   Escribe en español claro, sin jerga; si un término técnico es
   inevitable, añádelo al Glosario.

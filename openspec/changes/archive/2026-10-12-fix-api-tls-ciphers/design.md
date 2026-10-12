@@ -47,7 +47,8 @@ acepta `env=`.
    lleva `cafile` propio ni `certifi`;
 2. toma de ese mismo contexto los nombres de sus cifrados de TLS 1.2 (los de
    `get_ciphers()` cuyo `protocol` no es `TLSv1.3`);
-3. llama a `set_ciphers("@SECLEVEL=2:" + base + ":AES256-GCM-SHA384:AES128-GCM-SHA256")`.
+3. llama a `set_ciphers(f"@SECLEVEL={nivel}:" + base + ":AES256-GCM-SHA384:AES128-GCM-SHA256")`,
+   con `nivel = max(2, context.security_level)`.
 
 `_download` pasa ese contexto a `urlopen(…, context=tls_context())`.
 
@@ -57,11 +58,23 @@ acepta `env=`.
 - `ssl._DEFAULT_CIPHERS` es privado, y en Python 3.12 la cadena por defecto
   vive en C.
 
-**Por qué `@SECLEVEL=2` explícito.** `set_ciphers` sustituye la cadena
-completa, nivel de seguridad incluido. Hoy el nivel sigue en 2 en las dos
-plataformas, pero dejarlo escrito evita que una versión de OpenSSL con otro
-nivel por defecto lo baje sin avisar. Un test compara el nivel con el del
-contexto por defecto.
+**Nivel de seguridad: `max(2, nivel de la máquina)`.**
+- **Qué es:** el nivel de seguridad de OpenSSL decide qué cifrados y tamaños
+  de clave se admiten. La cadena que se pasa a `set_ciphers` lo fija de forma
+  explícita.
+- **Nunca baja la política de la máquina:** si el sistema tiene una política
+  más estricta (nivel 3 o más), se respeta.
+- **Nunca queda por debajo de 2:** si una versión de OpenSSL trajera un nivel
+  por defecto menor, no se usa.
+- **Hoy:** el nivel por defecto es 2 en las dos plataformas, así que el
+  resultado es 2.
+- **Tests:**
+  - el nivel del contexto es igual al del contexto por defecto;
+  - con un contexto por defecto simulado de nivel 3, se mantiene 3;
+  - con uno de nivel 1, sube a 2.
+- **Por qué no `@SECLEVEL=2` fijo:** era la versión anterior de esta decisión.
+  El code-reviewer señaló que en una máquina de nivel 3 bajaría la política, y
+  el usuario decidió cambiarlo.
 
 **TLS 1.3 no cambia.** `set_ciphers` solo afecta a TLS 1.2 e inferiores. Los
 cifrados de TLS 1.3 siguen siendo los de por defecto, y la versión mínima
@@ -198,9 +211,14 @@ pasaría.
   la decisión 3 (datos públicos, sin credenciales). Se revisará si la API
   vuelve a admitir ECDHE o si algún día se envían datos privados.
 - **[Riesgo] Otra versión de OpenSSL cambia la lista o el nivel por
-  defecto.** → La lista se toma del propio contexto y el nivel se fija
-  explícitamente. Los tests comparan con el contexto por defecto de la misma
-  máquina, no con valores escritos a mano.
+  defecto.** → La lista se toma del propio contexto y el nivel es
+  `max(2, nivel por defecto)`. Los tests comparan con el contexto por defecto
+  de la misma máquina, no con valores escritos a mano.
+- **[Compromiso] En una máquina con nivel de seguridad 3 o más, la conexión
+  con la API puede seguir fallando.** Ese nivel exige claves RSA de al menos
+  3072 bits, y la API usa intercambio RSA. → Es intencionado: se respeta la
+  política de la máquina antes que conectar. En las máquinas del proyecto (Mac
+  e imagen Docker) el nivel es 2.
 - **[Riesgo] Los certificados de prueba dejan de valer con un Python más
   estricto.** → Se generan con las extensiones que exige `VERIFY_X509_STRICT`.
   Si aun así fallan, se regeneran con el script.

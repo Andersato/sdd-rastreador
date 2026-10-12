@@ -2,6 +2,7 @@
 
 import http.client
 import socket
+import ssl
 import time
 
 import pytest
@@ -92,3 +93,57 @@ def test_sent_event_after_full_body(http_server):
     conn.close()
     assert sent.wait(timeout=5)
     assert not http_server.sent("/other").is_set()
+
+
+TLS_CIPHERS = ["AES256-GCM-SHA384", "AES128-GCM-SHA256"]
+
+
+def tls_server(cipher, cert="localhost"):
+    from tests.http_server import TLS_FIXTURES, LocalServer
+
+    return LocalServer(
+        tls=(TLS_FIXTURES / f"{cert}.pem", TLS_FIXTURES / f"{cert}.key", cipher)
+    ).start()
+
+
+def tls_client(ciphers=None):
+    from tests.http_server import TLS_FIXTURES
+
+    ctx = ssl.create_default_context(cafile=str(TLS_FIXTURES / "ca.pem"))
+    if ciphers is not None:
+        ctx.set_ciphers(ciphers)
+    return ctx
+
+
+@pytest.mark.parametrize("cipher", TLS_CIPHERS)
+def test_tls_server_uses_tls12_and_the_given_cipher(cipher):
+    server = tls_server(cipher)
+    try:
+        server.add("/ok", body=b'{"a": 1}')
+        assert server.url("/ok").startswith("https://127.0.0.1:")
+        ctx = tls_client(ciphers=cipher)
+        conn = http.client.HTTPSConnection("127.0.0.1", server.port, context=ctx, timeout=5)
+        conn.request("GET", "/ok")
+        # Antes de leer el cuerpo: al terminar, la conexión se cierra.
+        assert conn.sock.version() == "TLSv1.2"
+        assert conn.sock.cipher()[0] == cipher
+        resp = conn.getresponse()
+        assert resp.status == 200 and resp.read() == b'{"a": 1}'
+        conn.close()
+        assert server.count("/ok") == 1
+    finally:
+        server.stop()
+
+
+def test_tls_server_rejects_ecdhe_only_client():
+    server = tls_server("AES256-GCM-SHA384")
+    try:
+        server.add("/ok", body=b"x")
+        ctx = tls_client(ciphers="ECDHE+AESGCM")
+        conn = http.client.HTTPSConnection("127.0.0.1", server.port, context=ctx, timeout=5)
+        with pytest.raises(ssl.SSLError):
+            conn.request("GET", "/ok")
+        conn.close()
+        assert server.count("/ok") == 0
+    finally:
+        server.stop()

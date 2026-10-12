@@ -2,8 +2,13 @@
 
 Cada ruta se configura con `add(path, ...)` y el servidor cuenta las
 peticiones recibidas por ruta, para comprobar que no hay reintentos.
+
+Con `tls=(certfile, keyfile, cipher)` sirve HTTPS solo con TLS 1.2 y ese
+único cifrado (certificados de prueba en `fixtures/tls/`).
 """
 
+import ssl
+import sys
 import threading
 import time
 from dataclasses import dataclass, field
@@ -11,6 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 FIXTURES = Path(__file__).parent / "fixtures"
+TLS_FIXTURES = FIXTURES / "tls"
 
 # Modos de respuesta
 NORMAL = "normal"                    # estado + cuerpo completos
@@ -29,15 +35,51 @@ class Route:
     delay: float = 0.3
 
 
+class _TLSHTTPServer(ThreadingHTTPServer):
+    """Envuelve cada conexión con TLS; el saludo se hace en el hilo de la
+    conexión (`Handler.setup`), no en el bucle principal del servidor."""
+
+    def __init__(self, address, handler, context):
+        self.tls_context = context
+        super().__init__(address, handler)
+
+    def get_request(self):
+        sock, addr = super().get_request()
+        return self.tls_context.wrap_socket(
+            sock, server_side=True, do_handshake_on_connect=False
+        ), addr
+
+    def handle_error(self, request, client_address):
+        # Un saludo TLS rechazado es un resultado esperado en los tests; el
+        # resto de errores se muestran como en el servidor HTTP normal.
+        if isinstance(sys.exc_info()[1], (ssl.SSLError, ConnectionError)):
+            return
+        super().handle_error(request, client_address)
+
+
+def _server_tls_context(certfile, keyfile, cipher) -> ssl.SSLContext:
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.minimum_version = ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+    ctx.set_ciphers(cipher)
+    ctx.load_cert_chain(certfile, keyfile)
+    return ctx
+
+
 class LocalServer:
-    def __init__(self):
+    def __init__(self, tls=None):
         self.routes: dict[str, Route] = {}
         self.requests: dict[str, int] = {}
         self.received_headers: dict[str, dict[str, str]] = {}
         self._sent: dict[str, threading.Event] = {}
         self._lock = threading.Lock()
         self._stop = threading.Event()
-        self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), self._make_handler())
+        self.tls = tls is not None
+        if tls is None:
+            self._httpd = ThreadingHTTPServer(("127.0.0.1", 0), self._make_handler())
+        else:
+            self._httpd = _TLSHTTPServer(
+                ("127.0.0.1", 0), self._make_handler(), _server_tls_context(*tls)
+            )
         self._httpd.daemon_threads = True
         self._thread = threading.Thread(
             target=self._httpd.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True
@@ -48,7 +90,8 @@ class LocalServer:
         return self._httpd.server_address[1]
 
     def url(self, path: str) -> str:
-        return f"http://127.0.0.1:{self.port}{path}"
+        scheme = "https" if self.tls else "http"
+        return f"{scheme}://127.0.0.1:{self.port}{path}"
 
     def add(self, path, status=200, body=b"", headers=None, mode=NORMAL, delay=0.3):
         if isinstance(body, str):
@@ -89,6 +132,11 @@ class LocalServer:
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass
+
+            def setup(self):
+                if isinstance(self.request, ssl.SSLSocket):
+                    self.request.do_handshake()
+                super().setup()
 
             def do_GET(self):
                 with server._lock:

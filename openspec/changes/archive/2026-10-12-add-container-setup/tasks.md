@@ -126,4 +126,4 @@
 
 - [x] 6.1 Ejecutar `pytest` completo (con Docker en marcha) y `pytest -m "not docker"`. Verificar que todo pasa y que `data/prices.db` y `.env` reales (si existe) no han cambiado (mismo tamaño, fecha y hash antes y después)
 - [x] 6.2 Recorrer la lista de comprobación de Linux en OrbStack y anotar el resultado en `docs/container-checks.md`. Verificar que todos los escenarios dan el resultado esperado
-- [ ] 6.3 Hacer la ejecución real única por HTTPS sobre una copia de `data/` y anotar la fecha, el código de salida y el resumen en `docs/container-checks.md`. Verificar el código 0 y la captura nueva en la copia
+- [x] 6.3 Hacer la ejecución real única por HTTPS sobre una copia de `data/` y anotar la fecha, el código de salida y el resumen en `docs/container-checks.md`. Verificar el código 0 y la captura nueva en la copia

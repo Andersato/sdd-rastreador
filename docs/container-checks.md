@@ -166,8 +166,9 @@ Máquina: OrbStack, Ubuntu 26.04.1 LTS, Docker 29.1.3, Compose 2.40.3.
 | Fecha | Código | Resumen |
 |-------|--------|---------|
 | 2026-10-12 11:37 (Madrid) | 0 (deducido, pendiente de confirmar) | `Captura guardada en /app/data/prices.db`, 11 514 estaciones (2 nuevas, 11 512 actualizadas), 43 079 precios, 0 avisos. La copia pasó de 1 a 2 capturas. |
+| 2026-10-12 12:59 (Madrid) | 0 | Primera captura real con Docker sobre `data/prices.db`, lanzada por el usuario después de `fix-api-tls-ciphers`: 11 514 estaciones (2 nuevas, 11 512 actualizadas), 43 074 precios, 0 avisos. La base pasó de 1 a 2 capturas. |
 
-Notas de esta ejecución:
+Notas de la ejecución de las 11:37:
 - El código de salida no se registró directamente, porque la salida pasaba
   por un filtro. Es 0 porque la ingesta solo imprime el resumen cuando termina
   bien.
@@ -175,3 +176,15 @@ Notas de esta ejecución:
   cinco segundos después (captura 3 en la copia, 09:38:01 UTC). Solo afectó a
   la copia, que se borró después. `data/prices.db` real no se tocó: mismo
   hash antes y después.
+
+Notas de la ejecución de las 12:59:
+- La lanzó el usuario con `docker compose run --rm ingest`, después de
+  `fix-api-tls-ciphers`. El código 0 se registró directamente y fue una sola
+  petición.
+- Se hizo sobre `data/prices.db` real, no sobre una copia como indica la
+  sección 2, por decisión del usuario: era su primera captura con Docker.
+  Añadir una captura no modifica las anteriores. Después, la base tiene 2
+  capturas.
+- La tarea 6.3 de `add-container-setup` se da por verificada con las dos
+  ejecuciones: la de las 11:37 comprobó la captura sobre una copia y la de las
+  12:59 confirmó el código 0.
