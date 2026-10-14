@@ -48,8 +48,10 @@ morir el proceso (también con `kill -9`), y no crea ningún archivo.
 
 - La CLI crea la carpeta si no existe (como hasta ahora hacía el guardado) y
   coge el bloqueo **antes de la descarga**, así la segunda ingesta no hace
-  ninguna petición. Cambio menor: si la descarga falla, la carpeta ya queda
-  creada (antes solo se creaba al guardar); no contradice ninguna spec.
+  ninguna petición. Para no cambiar lo que se ve hoy (lo fijan los tests de
+  `test_cli_invalid.py` y `test_cli.py`), si la ingesta falla **antes** de
+  guardar se quitan las carpetas que se crearon y siguen vacías; si falla el
+  guardado, la carpeta queda, como antes (la creaba el guardado).
 - Si `os.open` de la carpeta falla por otro motivo (p. ej. `EACCES`), es un
   `StorageError` controlado (código 1) con el texto "no se ha podido crear o
   escribir la base de datos", no una excepción sin capturar. Solo pasa con
@@ -188,20 +190,22 @@ solo para tests (como `--deadline`).
 
 ### D8. Contenedor: arranque del programador
 
-Nuevo `container/scheduler.py`, entrypoint del servicio `scheduler`:
+Nuevo `container/scheduler.py`, entrypoint del servicio `scheduler`. Se
+queda como **supervisor** de supercronic (no hace `exec`; ver D12):
 1. Escribe el crontab en `/tmp/crontab` (fuera de `./data`):
    `17 * * * * python /app/container/check.py`.
 2. Imprime una línea de arranque (intervalo recibido tal cual, minuto 17).
-3. Lanza la comprobación de arranque **en segundo plano y desligada**
-   para que, si dura más allá de las :17, supercronic ya esté en marcha y
-   la comprobación de las :17 vea "otra ingesta en curso". Doble fork **sin**
-   `setsid`/`start_new_session` (así sigue en el grupo de procesos y le
-   llega la parada de D12): `os.fork()` → el hijo hace `subprocess.Popen`
-   de `check.py` y `os._exit(0)` → el padre hace `os.waitpid` del hijo y
-   sigue. El nieto queda huérfano y lo recoge el init (tini, PID 1).
-4. `os.execv` de `supercronic -passthrough-logs /tmp/crontab` (las líneas de
-   la comprobación salen tal cual; el indicador exacto se confirma con
-   `supercronic -help` de la versión fijada).
+3. Lanza supercronic como hijo (`subprocess.Popen`, con
+   `-passthrough-logs -quiet`: las líneas de la comprobación salen tal cual
+   y sin los mensajes informativos de supercronic).
+4. Lanza la comprobación de arranque como otro hijo, sin esperarla, para
+   que, si dura más allá de las :17, supercronic ya esté en marcha y la
+   comprobación de las :17 vea "otra ingesta en curso".
+5. Bucle `os.wait()`: recoge a cualquier hijo que termine (la comprobación
+   de arranque) y sale con el código de supercronic cuando este termina
+   (si supercronic muere por su cuenta, Docker reinicia el servicio).
+6. Al recibir SIGTERM o SIGINT: `os.kill(-1, SIGTERM)` (D12) y sigue en el
+   bucle hasta que supercronic termine.
 
 Nuevo `container/check.py`: la comprobación en el contenedor. Si el usuario o
 el grupo es 0, escribe el motivo y termina sin coger el bloqueo ni leer la
@@ -228,6 +232,19 @@ etapa falla y no hay imagen. La imagen final solo copia el binario a
 usuario del host). Versión: la última estable al implementar; los
 SHA-256 se calculan una vez y se contrastan con el SHA-1 que publica el
 proyecto en la release.
+
+Fijado en la tarea 1.2 (2026-10-12): **v0.2.49** (publicada el 2026-08-14).
+
+| Binario | SHA-256 (fijado) | SHA-1 (release) |
+|---|---|---|
+| `supercronic-linux-amd64` | `a53ae236602c7338aba3fbaff40bda6300eae3b9fedb8261eb06cfe3724430c1` | `e63c11a9726b775a6a11801e81af4f3fb926aa68` |
+| `supercronic-linux-arm64` | `02aa0cb229ba09050cba6638059dadb9eedc2276632ea43d6a57a2f8c1629dd5` | `0b6c5bb743e0b0dafed1132198c81807927ac413` |
+
+Los SHA-1 coinciden con las instrucciones de la release y los SHA-256 con
+los que publica GitHub para cada archivo. Flags confirmados con `-help`:
+`-passthrough-logs`, `-test`, `-quiet`. Comprobado también: supercronic
+lanza **cada trabajo en un grupo de procesos nuevo** y, al recibir SIGTERM,
+**espera a que terminen** sin reenviarles la señal (ver D12).
 
 Alternativa descartada: `ADD --checksum` de BuildKit. No admite elegir el
 checksum por arquitectura sin varias etapas y exige una sintaxis de
@@ -264,7 +281,6 @@ services:
     restart: unless-stopped
     environment:
       TZ: Europe/Madrid
-      TINI_KILL_PROCESS_GROUP: "1"
       CAPTURE_INTERVAL_HOURS: ${CAPTURE_INTERVAL_HOURS:-}
       INGEST_API_URL: ${INGEST_API_URL:-}
     logging:
@@ -282,16 +298,50 @@ services:
 
 ### D12. Parada sin esperar a la ingesta
 
-Con `TINI_KILL_PROCESS_GROUP=1`, el init reenvía SIGTERM a todo el grupo de
-procesos (supercronic y las comprobaciones o ingestas en curso), así que la
-ingesta termina enseguida con las garantías de siempre (transacción sin
-confirmar; en una primera captura puede quedar un `prices.db.tmp-*`, ya
-documentado en el README). Aunque algo ignorase la señal, Docker mata todo a
-los 10 s (`stop_grace_period` por defecto), por debajo de los 15 s de la
-spec. supercronic, por sí solo, esperaría a sus trabajos: por eso se reenvía
-al grupo. La tarea 1.2 confirma que supercronic no crea un grupo de procesos
-nuevo para sus trabajos; si lo creara, se consulta antes de seguir. El test usa un límite de 5 s, por debajo de los 10 s de Docker,
-para comprobar de verdad el reenvío (la spec pide < 15 s).
+La tarea 1.2 comprobó que supercronic lanza cada trabajo en un grupo de
+procesos nuevo y que, al recibir SIGTERM, espera a sus trabajos sin
+reenviarles la señal. Por eso `TINI_KILL_PROCESS_GROUP` no serviría y se
+descarta (decisión del usuario, opción 1):
+
+- tini (PID 1) reenvía SIGTERM a `scheduler.py`, que hace
+  `os.kill(-1, SIGTERM)`. En Linux eso llega a todos los procesos del
+  contenedor salvo al init y al propio llamante, sea cual sea su grupo:
+  supercronic, el `sh -c` de cada trabajo, las comprobaciones y las
+  ingestas. Solo ve los procesos de su espacio de nombres (el contenedor).
+- La ingesta y la comprobación tratan SIGTERM como Ctrl+C (D14): deshacen la
+  transacción, borran sus temporales y terminan. supercronic ve terminar sus
+  trabajos y sale; `scheduler.py` sale con él.
+- Si algo ignorase la señal, Docker mata todo a los 10 s
+  (`stop_grace_period` por defecto), por debajo de los 15 s de la spec. El
+  test usa un límite de 5 s para comprobar de verdad el reenvío.
+
+Alternativas descartadas: aceptar el SIGKILL de Docker a los 10 s (la
+ingesta no limpia) y acortar `stop_grace_period` (igual, pero antes).
+
+### D14. SIGTERM tratado como Ctrl+C en la ingesta
+
+Hoy la ingesta no instala ningún manejador: con SIGTERM, Python termina sin
+ejecutar los `except BaseException` de `storage.py` (ROLLBACK y borrado del
+temporal), igual que con SIGKILL, y quedan un diario pendiente o un
+`prices.db.tmp-*`. Se añade el context manager `sigterm_as_interrupt()` (en
+`src/ingestion/lock.py`, junto al resto de la gestión de procesos), que
+instala para SIGTERM el mismo comportamiento que SIGINT (lanzar
+`KeyboardInterrupt` en el hilo principal) y restaura el manejador anterior
+al salir (algunos tests llaman a `main()` dentro del proceso de pytest).
+Lo usan `__main__.main` y `scheduled.main`. Así:
+- durante la descarga, la espera `thread.join(timeout)` se interrumpe y el
+  proceso sale enseguida (el hilo de descarga es *daemon*);
+- durante el guardado, el `KeyboardInterrupt` llega cuando vuelve la llamada
+  de SQLite en curso, pasa por el ROLLBACK y por el borrado del temporal;
+- `main` captura `KeyboardInterrupt`, escribe `Error: ingesta interrumpida`
+  y devuelve 130 (el mismo código que daba Ctrl+C sin capturar). Ctrl+C deja
+  de mostrar una traza de Python. Si se interrumpe antes de guardar, se
+  quitan las carpetas vacías que creó la propia ingesta (D1).
+- Comprobado en la implementación: sin el manejador, un SIGTERM durante el
+  guardado deja `prices.db-journal` (código -15); con él, código 130 y solo
+  `prices.db`.
+
+Requisito "Señal de parada tratada como Ctrl+C" de `price-ingestion`.
 
 ### D13. Tests
 
@@ -330,6 +380,20 @@ para comprobar de verdad el reenvío (la spec pide < 15 s).
   en `docs/container-checks.md` (fuera de tasks.md).
 - Manual (en `docs/container-checks.md`): reinicio de OrbStack, parada y
   reinicio, y suspensión.
+- Aislamiento del proyecto real (el programador real puede estar en marcha
+  mientras se pasan los tests): los tests usan la imagen
+  `precios-gasolineras-ingest-test`, construida desde una copia temporal, y
+  proyectos de Compose `pgtest-…`. El helper `docker()` rechaza `compose`
+  sin `-p pgtest-…`, el `docker-compose.yml` del repo, los contenedores
+  `sdd-rastreador-…`, la imagen real y el `data/` real; `run_cli`,
+  `start_cli`, `run_check` e `ingest` rechazan bases dentro del `data/` real.
+  `scheduler.py` recibe el instalador de manejadores por parámetro (los
+  tests nunca instalan el que hace `kill(-1)`) y se niega a arrancar fuera de
+  Linux.
+- Agentes de Claude Code (decisión del usuario): un hook `PreToolUse` en
+  `.claude/settings.json` (`.claude/hooks/guard_real_project.py`, con tests en
+  `tests/unit/test_guard_hook.py`) bloquea los comandos Bash que tocarían el
+  proyecto real de Compose, sus contenedores, su imagen o `data/`.
 
 ## Risks / Trade-offs
 

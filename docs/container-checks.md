@@ -1,7 +1,7 @@
 # Comprobaciones del contenedor que no se automatizan
 
 Los tests de `tests/docker/` comprueban casi todo el comportamiento del
-contenedor en el Mac. Quedan dos cosas que se comprueban a mano:
+contenedor en el Mac. Quedan tres cosas que se comprueban a mano:
 
 1. **Permisos en Linux.** En macOS, Docker no aplica los permisos de las
    carpetas compartidas por número de usuario, así que los escenarios del
@@ -10,6 +10,8 @@ contenedor en el Mac. Quedan dos cosas que se comprueban a mano:
    terminar.
 2. **Conexión real por HTTPS.** Una única ejecución contra la API del
    Ministerio, para ver que desde la imagen se conecta bien (certificados).
+3. **Programador en el Mac** (`add-scheduled-collection`): lo que depende
+   del paso real del tiempo, de reiniciar OrbStack o de suspender el Mac.
 
 ## 1. Lista de comprobación en Linux (OrbStack)
 
@@ -148,6 +150,61 @@ docker compose down
 Esperado: código 0. El resumen muestra las estaciones procesadas (unas
 12 000). La copia tiene una captura más que `data/prices.db` original.
 
+## 3. Programador en el Mac
+
+Se hace con el programador real ya activado (`docker compose up -d`, ver el
+README), así que no añade peticiones a la API aparte de las capturas que le
+tocan. Antes, comprueba que OrbStack tiene activado **Start at login**.
+
+Para ver el estado y las últimas líneas del log:
+
+```sh
+docker compose ps scheduler
+docker compose logs --tail 20 scheduler
+```
+
+### Escenarios
+
+1. **Comprobaciones horarias** (escenario «Comprobaciones horarias»).
+   Pasadas al menos 2 horas desde `docker compose up -d`, los logs muestran
+   una línea por hora, siempre en el minuto 17 (y ninguna a en punto),
+   además de la de arranque.
+2. **Reinicio de Docker** (escenario «Reinicio de Docker»). Cierra OrbStack
+   del todo (icono de la barra de menús → *Quit OrbStack*) y vuelve a
+   abrirlo, o reinicia el Mac. Sin lanzar nada, `docker compose ps
+   scheduler` lo muestra en marcha (`running`) y los logs tienen una línea
+   nueva de `programador en marcha` seguida de su comprobación.
+3. **Parado por el usuario** (escenario «Parado por el usuario»). Lanza
+   `docker compose stop`, apunta el número de capturas
+   (`sqlite3 data/prices.db "SELECT COUNT(*) FROM snapshots"`) y reinicia
+   OrbStack. `docker compose ps -a scheduler` lo muestra parado (`exited`) y
+   el número de capturas no cambia. Vuelve a activarlo con
+   `docker compose up -d`.
+4. **Vuelta de una suspensión** (escenario «Vuelta de una suspensión»).
+   Suspende el Mac más de 6 horas (por ejemplo, por la noche) sin cerrar
+   OrbStack. Al despertarlo, como tarde en la siguiente comprobación del
+   minuto 17 los logs muestran `captura guardada`, y solo una.
+
+### Verificación posterior al archivo (no forma parte del cambio)
+
+Los cambios de hora se comprueban antes de archivar con tests de reloj
+inyectado (`tests/functional/test_scenarios_scheduled.py`). Lo que esos
+tests no ven es cuándo dispara supercronic en esos días. Se revisa en los
+logs reales, sin bloquear el archivo del cambio:
+
+- **2026-10-25** (las 02:00 vuelven a ser la 01:00): entre las 01:17 y las
+  04:17 hay comprobaciones cada hora; si hay dos a las 02:17, la segunda
+  dice `no toca capturar` y no hay ninguna captura de más.
+- **2027-03-28** (las 02:00 pasan a ser las 03:00): hay comprobaciones a
+  las 00:17, 01:17, 03:17 y 04:17, ninguna a las 02:17 y ninguna repetida.
+
+```sh
+docker compose logs scheduler | grep '2026-10-25 0[0-5]:'
+docker compose logs scheduler | grep '2027-03-28 0[0-5]:'
+```
+
+Si los logs de esos días ya se han rotado, se da por no comprobado y se anota.
+
 ## Resultados
 
 ### Lista de Linux
@@ -188,3 +245,14 @@ Notas de la ejecución de las 12:59:
 - La tarea 6.3 de `add-container-setup` se da por verificada con las dos
   ejecuciones: la de las 11:37 comprobó la captura sobre una copia y la de las
   12:59 confirmó el código 0.
+
+### Programador en el Mac
+
+| Fecha | Escenario | Resultado |
+|-------|-----------|-----------|
+| | Comprobaciones horarias | pendiente |
+| | Reinicio de Docker | pendiente |
+| | Parado por el usuario | pendiente |
+| | Vuelta de una suspensión | pendiente |
+| 2026-10-25 | Cambio de hora de octubre (posterior al archivo) | pendiente |
+| 2027-03-28 | Cambio de hora de marzo (posterior al archivo) | pendiente |

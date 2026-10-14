@@ -1,21 +1,45 @@
-# Ingesta de precios en un contenedor. Uso (ver README):
+# Ingesta de precios en contenedores. Uso (ver README):
 #   docker compose build
-#   docker compose run --rm ingest
+#   docker compose up -d            # programador: captura sola cada 6 h
+#   docker compose run --rm ingest  # una captura a mano
+
+# Lo común a los dos servicios: misma imagen, mismo usuario y misma carpeta.
+x-app: &app
+  build: .
+  image: precios-gasolineras-ingest
+  # UID/GID del usuario del host, desde .env: los archivos de ./data quedan
+  # a su nombre también en Linux. Root (0) lo rechazan los programas de arranque.
+  user: "${HOST_UID:?falta HOST_UID en .env (ver README)}:${HOST_GID:?falta HOST_GID en .env (ver README)}"
+  # Init como proceso 1: reenvía SIGTERM/SIGINT y recoge procesos huérfanos.
+  init: true
+  volumes:
+    # Sintaxis larga para que Docker no cree ./data si falta (en Linux
+    # quedaría a nombre de root).
+    - type: bind
+      source: ./data
+      target: /app/data
+      bind:
+        create_host_path: false
+
 services:
   ingest:
-    build: .
-    image: precios-gasolineras-ingest
-    # UID/GID del usuario del host, desde .env: los archivos de ./data quedan
-    # a su nombre también en Linux. Root (0) lo rechaza el programa de arranque.
-    user: "${HOST_UID:?falta HOST_UID en .env (ver README)}:${HOST_GID:?falta HOST_GID en .env (ver README)}"
-    # Init como proceso 1: reenvía SIGTERM/SIGINT a la ingesta.
-    init: true
+    <<: *app
+    # En un perfil aparte: `docker compose up` no lo arranca;
+    # `docker compose run --rm ingest` sí.
+    profiles: ["manual"]
     restart: "no"
-    volumes:
-      # Sintaxis larga para que Docker no cree ./data si falta (en Linux
-      # quedaría a nombre de root).
-      - type: bind
-        source: ./data
-        target: /app/data
-        bind:
-          create_host_path: false
+
+  scheduler:
+    <<: *app
+    entrypoint: ["python", "/app/container/scheduler.py"]
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Madrid
+      CAPTURE_INTERVAL_HOURS: ${CAPTURE_INTERVAL_HOURS:-}
+      # Solo para pruebas (servidor local); vacío = API del Ministerio.
+      INGEST_API_URL: ${INGEST_API_URL:-}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

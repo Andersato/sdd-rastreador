@@ -2,7 +2,9 @@
 guardado» del requisito «Lanzamiento único…».
 
 Antes de mirar la base se recupera siempre el diario pendiente (`recover`),
-como haría la siguiente ingesta: `docker stop` mata la ingesta sin ROLLBACK.
+como haría la siguiente ingesta, por si una interrupción lo dejara. Con
+`docker stop` (SIGTERM) la ingesta ya no lo deja: lo trata como Ctrl+C, hace
+ROLLBACK y termina con 130 (requisito «Señal de parada tratada como Ctrl+C»).
 """
 
 import json
@@ -21,6 +23,7 @@ BIG_STATIONS = 20_000
 FUELS = ("Gasoleo A", "Gasoleo B", "Gasolina 95 E5", "Gasolina 98 E5",
          "Gases licuados del petróleo", "Gasoleo Premium")
 JOURNAL_TIMEOUT_S = 60
+EXIT_INTERRUPTED = 130  # SIGTERM tratado como Ctrl+C (no 137, que sería SIGKILL)
 SIGINT_DELAYS_S = (0.0, 0.3, 0.8, 1.5)
 
 
@@ -124,7 +127,12 @@ def test_interrupted_during_download(project, http_server, seeded, signal):
 
 
 def test_stop_during_save(project, http_server, seeded, big_response):
-    """`docker stop` en cuanto aparece el diario: el corte cae en el guardado."""
+    """`docker stop` en cuanto aparece el diario: el corte cae en el guardado.
+
+    Que el diario exista antes del `docker stop` es la prueba de que el corte
+    cae durante el guardado (no durante la descarga). Tras la parada: código
+    130, solo la primera captura y ni diario ni temporal en `./data`.
+    """
     body, expected = big_response
     cut_inside_transaction = 0
     for attempt in range(3):
@@ -140,18 +148,19 @@ def test_stop_during_save(project, http_server, seeded, big_response):
                 "el diario no apareció: la ingesta no llegó a guardar"
             )
             docker("stop", name, timeout=60)
-            wait_exit(proc, 120)
+            code = wait_exit(proc, 120)
         assert not container_exists(name)
-        if journal.exists():
-            # Muerta dentro de la transacción: solo puede quedar la primera.
+        assert sorted(p.name for p in project.data.iterdir()) == ["prices.db"], (
+            "tras la parada no debe quedar diario ni temporal"
+        )
+        if code == EXIT_INTERRUPTED:
+            # Interrumpida dentro de la transacción: solo la primera captura.
             cut_inside_transaction += 1
-            assert proc.returncode != 0
             assert check_one_or_two_complete_captures(project, seed_state, expected) == 1
-        else:
-            # El guardado terminó antes del corte: una o dos completas.
-            check_one_or_two_complete_captures(project, seed_state, expected)
-        if cut_inside_transaction:
             break
+        # El guardado terminó entre la aparición del diario y la señal.
+        assert code == 0, f"código de salida inesperado: {code}"
+        assert check_one_or_two_complete_captures(project, seed_state, expected) == 2
     assert cut_inside_transaction, "ningún docker stop cayó dentro de la transacción"
 
 

@@ -4,13 +4,11 @@ Todos los tests de esta carpeta llevan la marca `docker` y se saltan si
 `docker info` falla. La imagen se construye una vez por sesión.
 """
 
-import os
 from pathlib import Path
 
 import pytest
 
-from tests.docker.helpers import IMAGE, docker, docker_available, make_project
-from tests.helpers import REPO_ROOT
+from tests.docker.helpers import TEST_IMAGE, docker, docker_available, make_project
 
 HERE = Path(__file__).parent
 _available = None
@@ -33,20 +31,17 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(scope="session")
-def image():
-    """Construye la imagen `precios-gasolineras-ingest` desde el repo.
+def image(tmp_path_factory):
+    """Construye la imagen de test `precios-gasolineras-ingest-test` con el código actual.
 
-    Sustituye la imagen local del usuario por la del código actual: es la
-    misma que daría `docker compose build`. El UID/GID se pasa como variable
-    del subproceso para no crear ni pisar el `.env` del repo.
+    Se construye desde una copia temporal del proyecto y con su propio nombre
+    de proyecto de Compose: nunca se toca el proyecto real (su imagen ni su
+    programador, que puede estar en marcha).
     """
-    result = docker(
-        "compose", "-f", str(REPO_ROOT / "docker-compose.yml"), "build", "-q",
-        env={"HOST_UID": str(os.getuid()), "HOST_GID": str(os.getgid())},
-        cwd=REPO_ROOT, timeout=900,
-    )
+    builder = make_project(tmp_path_factory.mktemp("imagen"), build=True)
+    result = builder.compose("build", "-q", timeout=900)
     assert result.returncode == 0, result.stderr
-    return IMAGE
+    return TEST_IMAGE
 
 
 @pytest.fixture

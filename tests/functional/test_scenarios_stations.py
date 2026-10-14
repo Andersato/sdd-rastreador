@@ -223,7 +223,7 @@ def test_scenario_invalid_coordinate_on_existing_station_without_coordinates(htt
     existing(db, **{LAT: ""})
     assert coords(db) == (None, None)
     code, out, _ = run_ingestion(
-        http_server, db, response(station("4375", **{LAT: "abc", LON: "-3,703790"})), capsys
+        http_server, db, response(station("4375", **{LAT: "abc", LON: "-3,703790", "Precio Gasoleo A": "1,409"})), capsys
     )
     assert code == 0
     assert coords(db) == (None, None)
@@ -249,7 +249,7 @@ def test_scenario_address_and_coordinates_change(http_server, tmp_path, capsys):
     """Escenario: Cambio de dirección y coordenadas."""
     db = tmp_path / "p.db"
     existing(db, **{"Dirección": "CALLE MAYOR, 1"})
-    data = response(station("4375", **{"Dirección": "CALLE MAYOR, 3", LAT: "40,416900", LON: "-3,703500"}))
+    data = response(station("4375", **{"Dirección": "CALLE MAYOR, 3", LAT: "40,416900", LON: "-3,703500", "Precio Gasoleo A": "1,409"}))
     code, out, _ = run_ingestion(http_server, db, data, capsys)
     assert code == 0
     assert query(db, "SELECT id, address, latitude, longitude FROM stations") == [
@@ -262,7 +262,7 @@ def test_scenario_fixed_field_arrives_empty(http_server, tmp_path, capsys):
     """Escenario: Dato fijo que llega vacío."""
     db = tmp_path / "p.db"
     existing(db, **{"Horario": "L-D: 24H"})
-    code, out, _ = run_ingestion(http_server, db, response(station("4375", **{"Horario": ""})), capsys)
+    code, out, _ = run_ingestion(http_server, db, response(station("4375", **{"Horario": "", "Precio Gasoleo A": "1,409"})), capsys)
     assert code == 0
     assert station_row(db, "4375")[5] == ""
     assert_no_warnings(out)
@@ -272,7 +272,7 @@ def test_scenario_coordinates_not_emptied_on_update(http_server, tmp_path, capsy
     """Escenario: Las coordenadas no se vacían al actualizar."""
     db = tmp_path / "p.db"
     existing(db, **{"Horario": "L-D: 24H"})
-    data = response(station("4375", **{"Horario": "", LAT: "", LON: "-3,703500"}))
+    data = response(station("4375", **{"Horario": "", LAT: "", LON: "-3,703500", "Precio Gasoleo A": "1,409"}))
     code, out, _ = run_ingestion(http_server, db, data, capsys)
     assert code == 0
     assert station_row(db, "4375")[5] == ""

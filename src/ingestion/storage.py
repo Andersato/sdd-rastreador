@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .errors import StorageError
+from .errors import InterruptedIngestion, ShortResponseError, StorageError
 from .models import ParsedSnapshot, PriceRecord
 
 # Raíz del repo (src/ingestion/storage.py → ../..): la base por defecto no
@@ -23,6 +23,8 @@ DEFAULT_DB_PATH = PROJECT_ROOT / "data" / "prices.db"
 
 SCHEMA_VERSION = 1
 MIN_SQLITE_VERSION = (3, 24, 0)  # necesario para INSERT ... ON CONFLICT
+INSTANT_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+SQLITE_READONLY_ROLLBACK = 776  # código extendido de SQLite
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS stations (
@@ -64,21 +66,103 @@ ON CONFLICT(id) DO UPDATE SET
 
 
 @dataclass(frozen=True)
+class LastSnapshot:
+    """Última captura guardada (la de mayor `id`)."""
+
+    downloaded_at: datetime
+    stations: int  # estaciones con al menos un precio en esa captura
+
+
+@dataclass(frozen=True)
+class ShortResponse:
+    """Respuesta con menos del 80 % de las estaciones de la última captura."""
+
+    stations: int  # estaciones con al menos un precio en la respuesta
+    reference: int  # estaciones con algún precio en la última captura
+
+
+@dataclass(frozen=True)
 class SaveResult:
     snapshot_id: int
     new_stations: int
     updated_stations: int
     prices: int
+    # Solo si se ha guardado a sabiendas una respuesta corta (accept_short).
+    short_response: ShortResponse | None = None
 
 
 def format_instant(instant: datetime) -> str:
     """Instante en UTC con formato `AAAA-MM-DDTHH:MM:SSZ`."""
     if instant.tzinfo is None:
         raise ValueError("el instante de descarga debe llevar zona horaria")
-    return instant.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return instant.astimezone(timezone.utc).strftime(INSTANT_FORMAT)
 
 
-def save_snapshot(snapshot: ParsedSnapshot, db_path: Path, downloaded_at: datetime) -> SaveResult:
+def read_last_snapshot(db_path: Path) -> LastSnapshot | None:
+    """Última captura guardada, o None si no hay. Nunca crea ni modifica nada.
+
+    Abre en solo lectura. Una conexión así no puede deshacer un diario
+    pendiente y falla con SQLITE_READONLY_ROLLBACK: entonces se lanza
+    `InterruptedIngestion` (lo deshará la siguiente ingesta, que abre en
+    escritura). Mirar solo si existe `prices.db-journal` no vale: puede quedar
+    un diario vacío que no está pendiente.
+    """
+    db_path = Path(db_path)
+    if not db_path.exists():
+        return None  # abrirla la crearía
+    conn = None
+    try:
+        conn = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True, timeout=1)
+        version = conn.execute("PRAGMA user_version").fetchone()[0]
+        if version not in (0, SCHEMA_VERSION):
+            raise StorageError(f"versión de base de datos no compatible: {version}")
+        has_snapshots = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'snapshots'"
+        ).fetchone()
+        if not has_snapshots:
+            return None
+        return _last_snapshot(conn)
+    except sqlite3.Error as exc:
+        if getattr(exc, "sqlite_errorcode", None) == SQLITE_READONLY_ROLLBACK:
+            raise InterruptedIngestion(
+                f"la última ingesta sobre {db_path} quedó a medias"
+            ) from exc
+        raise StorageError(f"no se ha podido leer la base de datos {db_path}: {exc}") from exc
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _last_snapshot(conn: sqlite3.Connection) -> LastSnapshot | None:
+    row = conn.execute(
+        "SELECT id, downloaded_at FROM snapshots ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    if row is None:
+        return None
+    snapshot_id, instant = row
+    stations = conn.execute(
+        "SELECT COUNT(DISTINCT station_id) FROM prices WHERE snapshot_id = ?", (snapshot_id,)
+    ).fetchone()[0]
+    return LastSnapshot(parse_instant(instant), stations)
+
+
+def parse_instant(text: str) -> datetime:
+    """Inverso de `format_instant`."""
+    return datetime.strptime(text, INSTANT_FORMAT).replace(tzinfo=timezone.utc)
+
+
+def save_snapshot(
+    snapshot: ParsedSnapshot,
+    db_path: Path,
+    downloaded_at: datetime,
+    accept_short: bool = False,
+) -> SaveResult:
+    """Guarda la captura, todo o nada.
+
+    Si la respuesta trae menos del 80 % de las estaciones de la última
+    captura, lanza `ShortResponseError` sin guardar nada, salvo con
+    `accept_short`, que la guarda y lo indica en `SaveResult.short_response`.
+    """
     if sqlite3.sqlite_version_info < MIN_SQLITE_VERSION:
         raise StorageError(
             f"se necesita SQLite 3.24 o posterior; esta instalación tiene {sqlite3.sqlite_version}"
@@ -91,14 +175,14 @@ def save_snapshot(snapshot: ParsedSnapshot, db_path: Path, downloaded_at: dateti
         raise StorageError(f"no se ha podido crear la carpeta {db_path.parent}: {exc}") from exc
 
     if db_path.exists():
-        return _save(db_path, snapshot, instant)
+        return _save(db_path, snapshot, instant, accept_short)
 
     try:
         tmp_path = _create_temporary(db_path)
     except OSError as exc:
         raise StorageError(f"no se ha podido crear la base de datos {db_path}: {exc}") from exc
     try:
-        result = _save(tmp_path, snapshot, instant)
+        result = _save(tmp_path, snapshot, instant, accept_short)
         os.replace(tmp_path, db_path)
     except OSError as exc:
         _remove_temporary(tmp_path)
@@ -109,7 +193,7 @@ def save_snapshot(snapshot: ParsedSnapshot, db_path: Path, downloaded_at: dateti
     return result
 
 
-def _save(path: Path, snapshot: ParsedSnapshot, instant: str) -> SaveResult:
+def _save(path: Path, snapshot: ParsedSnapshot, instant: str, accept_short: bool) -> SaveResult:
     conn = None
     try:
         conn = sqlite3.connect(path, isolation_level=None)
@@ -117,7 +201,7 @@ def _save(path: Path, snapshot: ParsedSnapshot, instant: str) -> SaveResult:
         conn.execute("PRAGMA foreign_keys = ON")
         conn.execute("BEGIN IMMEDIATE")
         try:
-            result = _write(conn, snapshot, instant)
+            result = _write(conn, snapshot, instant, accept_short)
             conn.execute("COMMIT")
             return result
         except BaseException:
@@ -131,8 +215,16 @@ def _save(path: Path, snapshot: ParsedSnapshot, instant: str) -> SaveResult:
             conn.close()
 
 
-def _write(conn: sqlite3.Connection, snapshot: ParsedSnapshot, instant: str) -> SaveResult:
+def _write(
+    conn: sqlite3.Connection, snapshot: ParsedSnapshot, instant: str, accept_short: bool
+) -> SaveResult:
     _ensure_schema(conn)
+    # La referencia se lee aquí, con la conexión de escritura: tras el
+    # BEGIN IMMEDIATE (que deshace un diario pendiente) y tras comprobar la
+    # versión, y antes de insertar la captura nueva.
+    short = _short_response(conn, snapshot)
+    if short is not None and not accept_short:
+        raise ShortResponseError(short.stations, short.reference)
     snapshot_id = conn.execute(
         "INSERT INTO snapshots (downloaded_at, source_date) VALUES (?, ?)",
         (instant, snapshot.source_date),
@@ -148,7 +240,23 @@ def _write(conn: sqlite3.Connection, snapshot: ParsedSnapshot, instant: str) -> 
         conn.execute(UPSERT_STATION, asdict(station))
 
     _insert_prices(conn, snapshot_id, snapshot.prices)
-    return SaveResult(snapshot_id, new, updated, len(snapshot.prices))
+    return SaveResult(snapshot_id, new, updated, len(snapshot.prices), short)
+
+
+def _short_response(conn: sqlite3.Connection, snapshot: ParsedSnapshot) -> ShortResponse | None:
+    """ShortResponse si la respuesta no llega al 80 % de la última captura."""
+    last = _last_snapshot(conn)
+    if last is None or last.stations == 0:
+        return None
+    stations = len({price.station_id for price in snapshot.prices})
+    if is_short(stations, last.stations):
+        return ShortResponse(stations, last.stations)
+    return None
+
+
+def is_short(stations: int, reference: int) -> bool:
+    """Menos del 80 % de `reference`, con enteros (9.600 de 12.000 no lo es)."""
+    return stations * 10 < reference * 8
 
 
 def _ensure_schema(conn: sqlite3.Connection) -> None:

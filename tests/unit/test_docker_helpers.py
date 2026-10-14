@@ -115,3 +115,40 @@ def test_make_project_never_touches_repo_env(tmp_path, monkeypatch):
     assert (project.root / ".env").read_text() == "HOST_UID=1001\nHOST_GID=1001\n"
     assert not (tmp_path / "repo" / ".env").exists()
     assert project.data.is_dir()
+
+
+# --- Barrera: los tests no tocan el proyecto real -----------------------------
+
+@pytest.mark.parametrize("args", [
+    ("compose", "up", "-d"),
+    ("compose", "-p", "sdd-rastreador", "stop"),
+    ("compose", "-p", "pgtest-x", "-f", helpers.REAL_COMPOSE_FILE, "build"),
+    ("stop", f"{helpers.REAL_PROJECT}-scheduler-1"),
+    ("restart", f"{helpers.REAL_PROJECT}-scheduler-1"),
+    ("build", "-t", helpers.IMAGE, "."),
+    ("rmi", f"{helpers.IMAGE}:latest"),
+    ("run", "-v", f"{helpers.REAL_DATA}:/app/data", helpers.TEST_IMAGE),
+])
+def test_guard_rejects_real_project(args, no_subprocess):
+    with pytest.raises(ValueError):
+        helpers.docker(*args)
+
+
+def test_guard_allows_test_projects():
+    helpers.guard_docker_args(["compose", "-p", "pgtest-abcd", "-f", "/tmp/x/docker-compose.yml",
+                               "up", "-d"])
+    helpers.guard_docker_args(["stop", "pgtest-1234"])
+    helpers.guard_docker_args(["run", "--rm", helpers.TEST_IMAGE])
+
+
+def test_real_data_is_rejected_by_cli_helpers():
+    from tests.helpers import REAL_DATA, run_check, run_cli, start_cli
+    from tests.storage_helpers import ingest
+
+    db = REAL_DATA / "prices.db"
+    for call in (lambda: run_cli("http://127.0.0.1:9/api", db),
+                 lambda: start_cli("http://127.0.0.1:9/api", db),
+                 lambda: run_check("http://127.0.0.1:9/api", db, "2026-10-12T12:17:00Z"),
+                 lambda: ingest(db, {})):
+        with pytest.raises(ValueError, match="data/ real"):
+            call()

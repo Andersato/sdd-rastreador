@@ -18,8 +18,16 @@ from urllib.parse import urlparse
 
 from tests.helpers import REPO_ROOT
 
-IMAGE = "precios-gasolineras-ingest"
+IMAGE = "precios-gasolineras-ingest"  # la del proyecto real: los tests no la tocan
+TEST_IMAGE = "precios-gasolineras-ingest-test"
+# Nombre del proyecto de Compose real (el de la carpeta del repo).
+REAL_PROJECT = REPO_ROOT.name.lower()
+REAL_COMPOSE_FILE = str(REPO_ROOT / "docker-compose.yml")
+REAL_DATA = (REPO_ROOT / "data").resolve()
+TEST_PREFIX = "pgtest"
 SERVICE = "ingest"
+SCHEDULER = "scheduler"
+OVERRIDE = "test-scheduler.yml"
 CONTAINER_DB = "/app/data/prices.db"
 HOST_ALIAS = "host.docker.internal"
 # Destinos sin servidor: puerto cerrado del propio contenedor y nombre que
@@ -37,7 +45,31 @@ def docker_env(extra=None) -> dict[str, str]:
     return env
 
 
+def guard_docker_args(args) -> None:
+    """Barrera: ningún test puede tocar el proyecto real de Compose.
+
+    Con el programador real en marcha, un test no debe pararlo, reconstruirlo
+    ni reiniciarlo. Se rechaza: `compose` sin `-p pgtest-…`, el
+    `docker-compose.yml` del repo, la imagen o los contenedores del proyecto
+    real y montar el `data/` real.
+    """
+    args = [str(arg) for arg in args]
+    if args and args[0] == "compose":
+        if "-p" not in args or not args[args.index("-p") + 1].startswith(TEST_PREFIX):
+            raise ValueError(f"compose en los tests solo con -p {TEST_PREFIX}-…: {args}")
+    for arg in args:
+        if arg == REAL_COMPOSE_FILE:
+            raise ValueError("los tests no pueden usar el docker-compose.yml del proyecto real")
+        if arg.startswith(f"{REAL_PROJECT}-") or arg.startswith(f"{REAL_PROJECT}_"):
+            raise ValueError(f"los tests no pueden tocar los contenedores del proyecto real: {arg}")
+        if arg in (IMAGE, f"{IMAGE}:latest"):
+            raise ValueError(f"los tests no pueden usar ni sustituir la imagen real {IMAGE}")
+        if str(REAL_DATA) in arg:
+            raise ValueError("los tests no pueden usar la carpeta data/ real")
+
+
 def docker(*args, env=None, cwd=None, timeout=300, input=None) -> subprocess.CompletedProcess:
+    guard_docker_args(args)
     return subprocess.run(
         ["docker", *args],
         env=docker_env(env),
@@ -102,7 +134,7 @@ def dir_state(path) -> dict[str, bytes] | None:
     }
 
 
-def unique_name(prefix="pgtest") -> str:
+def unique_name(prefix=TEST_PREFIX) -> str:
     return f"{prefix}-{secrets.token_hex(4)}"
 
 
@@ -125,18 +157,52 @@ class Project:
     def compose_file(self) -> Path:
         return self.root / "docker-compose.yml"
 
-    def write_env(self, uid=None, gid=None, drop=()) -> None:
+    def write_env(self, uid=None, gid=None, drop=(), **extra) -> None:
         values = {"HOST_UID": uid if uid is not None else os.getuid(),
-                  "HOST_GID": gid if gid is not None else os.getgid()}
+                  "HOST_GID": gid if gid is not None else os.getgid(), **extra}
         lines = [f"{k}={v}\n" for k, v in values.items() if k not in drop]
         (self.root / ".env").write_text("".join(lines))
 
     def remove_env(self) -> None:
         (self.root / ".env").unlink(missing_ok=True)
 
+    def compose_files(self) -> list[str]:
+        files = ["-f", str(self.compose_file)]
+        override = self.root / OVERRIDE
+        if override.exists():
+            files += ["-f", str(override)]
+        return files
+
     def compose(self, *args, env=None, cwd=None, timeout=300) -> subprocess.CompletedProcess:
-        return docker("compose", "-p", self.name, "-f", str(self.compose_file), *args,
+        return docker("compose", "-p", self.name, *self.compose_files(), *args,
                       env=env, cwd=cwd or self.root, timeout=timeout)
+
+    def start_scheduler(self, url, timeout=300) -> subprocess.CompletedProcess:
+        """`docker compose up -d` con el programador apuntando a `url` (obligatoria).
+
+        Es la única forma de arrancar el programador en los tests: la URL va
+        en un archivo de Compose adicional, junto con NO_PROXY, para que
+        nunca llame a la API real.
+        """
+        check_url(url)
+        (self.root / OVERRIDE).write_text(
+            "services:\n"
+            f"  {SCHEDULER}:\n"
+            "    environment:\n"
+            f"      INGEST_API_URL: \"{url}\"\n"
+            f"      NO_PROXY: \"{NO_PROXY_VALUE}\"\n"
+            f"      no_proxy: \"{NO_PROXY_VALUE}\"\n"
+        )
+        return self.compose("up", "-d", timeout=timeout)
+
+    def scheduler_logs(self) -> str:
+        result = self.compose("logs", "--no-log-prefix", SCHEDULER, timeout=60)
+        return result.stdout + result.stderr
+
+    def exec_check(self, timeout=120) -> subprocess.CompletedProcess:
+        """Comprobación horaria simulada: el mismo comando que lanza supercronic."""
+        return self.compose("exec", "-T", SCHEDULER, "python", "/app/container/check.py",
+                            timeout=timeout)
 
     def _run_args(self, container_name, entrypoint, args) -> list[str]:
         run = ["compose", "-p", self.name, "-f", str(self.compose_file), "run", "--rm", "-T",
@@ -160,8 +226,10 @@ class Project:
         """Como `run_ingest`, pero en segundo plano (para interrumpirla)."""
         check_url(url)
         check_args(args)
+        run_args = self._run_args(container_name, None, ["--url", url, *args])
+        guard_docker_args(run_args)
         return subprocess.Popen(
-            ["docker", *self._run_args(container_name, None, ["--url", url, *args])],
+            ["docker", *run_args],
             env=docker_env(), cwd=self.root,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
@@ -183,18 +251,18 @@ def make_project(tmp_path, *, uid=None, gid=None, env=True, data=True, build=Fal
                  image=None) -> Project:
     """Proyecto temporal con `docker-compose.yml`, `.env` y `data/`.
 
-    `build=True` copia también lo necesario para construir la imagen ahí;
-    `image` sustituye el nombre de la imagen del servicio (para no pisar la
-    del usuario al reconstruir).
+    `build=True` copia también lo necesario para construir la imagen ahí.
+    La imagen de los servicios es siempre una de test (`TEST_IMAGE` o la que
+    se indique en `image`), nunca la del proyecto real.
     """
+    image = image or TEST_IMAGE
     root = Path(tmp_path) / unique_name("proyecto")
     root.mkdir(parents=True)
     compose = (REPO_ROOT / "docker-compose.yml").read_text()
-    if image is not None:
-        old = f"image: {IMAGE}\n"
-        if old not in compose:
-            raise AssertionError("docker-compose.yml no tiene la línea de imagen esperada")
-        compose = compose.replace(old, f"image: {image}\n")
+    old = f"image: {IMAGE}\n"
+    if compose.count(old) != 1:
+        raise AssertionError("docker-compose.yml no tiene la línea de imagen esperada")
+    compose = compose.replace(old, f"image: {image}\n")
     (root / "docker-compose.yml").write_text(compose)
     if build:
         for name in BUILD_FILES:

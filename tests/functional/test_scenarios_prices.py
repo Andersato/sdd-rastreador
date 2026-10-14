@@ -177,14 +177,19 @@ def test_scenario_existing_station_without_any_price(http_server, tmp_path, caps
     db = tmp_path / "p.db"
     ingest(db, response(station("5120", **{"Precio Gasoleo A": "1,399"})))
     code, out, _ = run_ingestion(
-        http_server, db, response(station("5120", **{"Rótulo": "CEPSA", **all_prices_empty()})), capsys
+        http_server,
+        db,
+        response(station("5120", **{"Rótulo": "CEPSA", **all_prices_empty()}),
+                 # Otra estación con precio: sin ella la respuesta sería corta (0 %).
+                 station("4375", **{"Precio Gasoleo A": "1,409"})),
+        capsys,
     )
     assert code == 0
     assert station_row(db, "5120")[1] == "CEPSA"
     assert prices_of(db, "5120", snapshot_id=1) == {"Gasoleo A": 1.399}
     assert prices_of(db, "5120", snapshot_id=2) == {}
     assert query(db, "SELECT COUNT(*) FROM snapshots") == [(2,)]
-    assert "Estaciones procesadas: 1 (0 nuevas, 1 actualizada)" in out
+    assert "Estaciones procesadas: 2 (1 nueva, 1 actualizada)" in out
 
 
 # --- Combustibles guardados --------------------------------------------------

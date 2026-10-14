@@ -110,3 +110,22 @@ un mensaje, sin pedir nada a la API ni tocar la base.
 #### Scenario: Primera ejecución con base inexistente
 - **WHEN** `/tmp/a` existe vacía y se lanzan a la vez dos ingestas sobre `/tmp/a/prices.db` contra un servidor que responde correctamente tras 1 segundo
 - **THEN** una guarda la primera captura y la otra termina con el mensaje de ingesta en curso, y el servidor recibe una sola petición
+
+### Requirement: Señal de parada tratada como Ctrl+C
+Al recibir SIGTERM, la ingesta SHALL comportarse igual que con Ctrl+C:
+deshacer la transacción en curso, borrar sus archivos temporales y terminar
+con código distinto de 0. La base MUST quedar con las capturas anteriores
+intactas (o también con la nueva completa, si ya se había confirmado) y sin
+ningún diario ni temporal en su carpeta.
+
+#### Scenario: Señal de parada durante el guardado
+- **WHEN** la base tiene 1 captura y la ingesta recibe SIGTERM mientras guarda la segunda (respuesta de 20.000 estaciones)
+- **THEN** la ejecución termina con código distinto de 0, la base contiene la primera captura intacta (o las dos completas, si la segunda ya se había confirmado) y en su carpeta solo queda `prices.db`, sin `prices.db-journal` ni `prices.db.tmp-*`
+
+#### Scenario: Señal de parada durante la primera captura
+- **WHEN** la carpeta está vacía y la ingesta recibe SIGTERM mientras guarda la primera captura (respuesta de 20.000 estaciones)
+- **THEN** la ejecución termina con código distinto de 0 y la carpeta queda vacía, o solo con `prices.db` completo si la captura ya se había confirmado
+
+#### Scenario: Señal de parada durante la descarga
+- **WHEN** la ingesta está esperando la respuesta de la API y recibe SIGTERM
+- **THEN** termina en menos de 2 segundos con código distinto de 0, sin hacer ninguna otra petición, y la base y su carpeta quedan exactamente igual que antes

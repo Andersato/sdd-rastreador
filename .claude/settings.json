@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard_real_project.py\"",
+            "timeout": 10,
+            "statusMessage": "Comprobando que no toca el proyecto real…"
+          }
+        ]
+      }
+    ]
+  }
+}

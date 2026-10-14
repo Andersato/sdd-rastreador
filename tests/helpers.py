@@ -10,7 +10,14 @@ from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 LOCAL_HOSTS = {"127.0.0.1", "localhost"}
+REAL_DATA = (REPO_ROOT / "data").resolve()
 PROXY_VARS = ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY")
+
+
+def check_not_real_data(db) -> None:
+    """Barrera: ningún test escribe en el `data/` real del proyecto."""
+    if db is not None and Path(db).resolve().is_relative_to(REAL_DATA):
+        raise ValueError(f"los tests no pueden usar la carpeta data/ real: {db}")
 
 
 def closed_port_url(path: str = "/api") -> str:
@@ -56,6 +63,7 @@ def run_cli(url, db, *extra_args, deadline=None, env=None, cwd=None, timeout=30,
     host = urlparse(url).hostname
     if host not in LOCAL_HOSTS:
         raise ValueError(f"run_cli solo acepta URLs locales, no {url!r}")
+    check_not_real_data(db)
     root = Path(project_root) if project_root is not None else REPO_ROOT
     if db is None and root.resolve() == REPO_ROOT.resolve():
         raise ValueError("run_cli sin --db solo se permite con una copia del proyecto (project_root)")
@@ -77,3 +85,39 @@ def run_cli(url, db, *extra_args, deadline=None, env=None, cwd=None, timeout=30,
         text=True,
         timeout=timeout,
     )
+
+
+def start_cli(url, db, *extra_args, deadline=None):
+    """Como `run_cli`, pero sin esperar: devuelve el `Popen` (salidas en tuberías)."""
+    host = urlparse(url).hostname
+    if host not in LOCAL_HOSTS:
+        raise ValueError(f"start_cli solo acepta URLs locales, no {url!r}")
+    check_not_real_data(db)
+    args = [sys.executable, "-m", "src.ingestion", "--url", url, "--db", str(db), *extra_args]
+    if deadline is not None:
+        args += ["--deadline", str(deadline)]
+    env = {k: v for k, v in os.environ.items() if k not in PROXY_VARS}
+    env["no_proxy"] = env["NO_PROXY"] = "127.0.0.1,localhost"
+    env["PYTHONPATH"] = str(REPO_ROOT)
+    return subprocess.Popen(args, cwd=REPO_ROOT, env=env, stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True)
+
+
+def run_check(url, db, now, *extra_args, deadline=None, timeout=60):
+    """Lanza una comprobación programada (`python -m src.ingestion.scheduled`) con reloj fijo.
+
+    Como `run_cli`, solo contra el servidor local o un puerto cerrado local.
+    """
+    host = urlparse(url).hostname
+    if host not in LOCAL_HOSTS:
+        raise ValueError(f"run_check solo acepta URLs locales, no {url!r}")
+    check_not_real_data(db)
+    args = [sys.executable, "-m", "src.ingestion.scheduled", "--url", url, "--db", str(db),
+            "--now", now, *extra_args]
+    if deadline is not None:
+        args += ["--deadline", str(deadline)]
+    env = {k: v for k, v in os.environ.items() if k not in PROXY_VARS}
+    env["no_proxy"] = env["NO_PROXY"] = "127.0.0.1,localhost"
+    env["PYTHONPATH"] = str(REPO_ROOT)
+    return subprocess.run(args, cwd=REPO_ROOT, env=env, capture_output=True, text=True,
+                          timeout=timeout)
