@@ -59,9 +59,13 @@ morir el proceso (también con `kill -9`), y no crea ningún archivo.
   escritura" de `ingestion-container` (carpeta legible) lo sigue cubriendo
   el error del guardado, como hasta ahora.
 - Funciona entre contenedores que comparten `./data` porque todos corren en
-  el mismo núcleo Linux (la máquina virtual de OrbStack o el VPS). Entre
+  el mismo núcleo Linux (la máquina virtual de Colima o el VPS). Entre
   macOS y la máquina virtual no se comparte: de ahí la exclusión de `.venv`
   + contenedor (decisión 7).
+- En macOS, Colima tiene que compartir `./data` con el montaje virtiofs, no
+  con sshfs: con sshfs los bloqueos de archivos no son fiables, y de ellos
+  dependen este `flock` y los bloqueos de SQLite. El README lo exige y explica
+  cómo comprobarlo (`colima status`).
 - Alternativas descartadas (decisión del usuario): `fcntl` sobre `prices.db`
   (interfiere con los bloqueos de SQLite y el archivo no existe en la primera
   ejecución, y `os.replace` lo sustituye); archivo `.lock` en `./data`
@@ -202,10 +206,21 @@ queda como **supervisor** de supercronic (no hace `exec`; ver D12):
    que, si dura más allá de las :17, supercronic ya esté en marcha y la
    comprobación de las :17 vea "otra ingesta en curso".
 5. Bucle `os.wait()`: recoge a cualquier hijo que termine (la comprobación
-   de arranque) y sale con el código de supercronic cuando este termina
-   (si supercronic muere por su cuenta, Docker reinicia el servicio).
+   de arranque) y, cuando ya no le queda ningún hijo (`ChildProcessError`),
+   sale con el código de supercronic (si supercronic muere por su cuenta,
+   Docker reinicia el servicio). Si supercronic muere por una señal, el
+   código es 128 + el número de la señal, como en el shell (137 con SIGKILL,
+   143 con SIGTERM), en lugar del negativo que da
+   `os.waitstatus_to_exitcode`. Si nunca se ve salir a supercronic, sale con
+   1 (decisión del usuario, 2026-10-16). Si supercronic muere por su cuenta
+   mientras la comprobación de arranque sigue en curso, el contenedor no
+   sale (ni Docker lo reinicia) hasta que esa comprobación termina; mientras,
+   no hay comprobaciones horarias. Es un tiempo acotado por los límites de
+   la descarga y del guardado. Los trabajos que lanzó supercronic quedan a
+   cargo de tini y `scheduler.py` no los espera; si se cortan, SQLite deshace
+   la captura a medias al abrir la base.
 6. Al recibir SIGTERM o SIGINT: `os.kill(-1, SIGTERM)` (D12) y sigue en el
-   bucle hasta que supercronic termine.
+   bucle hasta que terminen supercronic y la comprobación de arranque.
 
 Nuevo `container/check.py`: la comprobación en el contenedor. Si el usuario o
 el grupo es 0, escribe el motivo y termina sin coger el bloqueo ni leer la
@@ -310,7 +325,13 @@ descarta (decisión del usuario, opción 1):
   ingestas. Solo ve los procesos de su espacio de nombres (el contenedor).
 - La ingesta y la comprobación tratan SIGTERM como Ctrl+C (D14): deshacen la
   transacción, borran sus temporales y terminan. supercronic ve terminar sus
-  trabajos y sale; `scheduler.py` sale con él.
+  trabajos y sale. `scheduler.py` espera también a la comprobación de
+  arranque, que lanza él y no supercronic, y sale cuando ya no le queda
+  ningún proceso hijo (`ChildProcessError`), con el código de supercronic.
+  Corrección del 2026-10-15: antes salía en cuanto salía supercronic. Al
+  terminar el contenedor, la comprobación de arranque moría a mitad del
+  ROLLBACK y dejaba `prices.db-journal` (lo detectó
+  `test_stop_during_save_keeps_complete_captures` en Colima).
 - Si algo ignorase la señal, Docker mata todo a los 10 s
   (`stop_grace_period` por defecto), por debajo de los 15 s de la spec. El
   test usa un límite de 5 s para comprobar de verdad el reenvío.
@@ -378,8 +399,12 @@ Requisito "Señal de parada tratada como Ctrl+C" de `price-ingestion`.
   y cómo se comporta con la hora repetida de octubre se comprueba en los
   logs reales de esos días, como verificación posterior al archivo anotada
   en `docs/container-checks.md` (fuera de tasks.md).
-- Manual (en `docs/container-checks.md`): reinicio de OrbStack, parada y
-  reinicio, y suspensión.
+- Manual (en `docs/container-checks.md`): reinicio del entorno de Docker
+  (Colima), parada y reinicio, y suspensión.
+- Carpetas temporales de `tests/docker/`: se crean en
+  `~/.cache/precios-gasolineras-tests/` (una por ejecución, borrada al
+  terminar) y no en la temporal del sistema (`/private/var/folders/…`), que
+  Colima no comparte con su máquina virtual: solo comparte `$HOME`.
 - Aislamiento del proyecto real (el programador real puede estar en marcha
   mientras se pasan los tests): los tests usan la imagen
   `precios-gasolineras-ingest-test`, construida desde una copia temporal, y
@@ -397,10 +422,12 @@ Requisito "Señal de parada tratada como Ctrl+C" de `price-ingestion`.
 
 ## Risks / Trade-offs
 
-- [`flock` sobre una carpeta compartida de OrbStack podría no bloquear entre
+- [`flock` sobre una carpeta compartida del Mac podría no bloquear entre
   contenedores] → Lo comprueba el test de Docker "Captura manual mientras el
   programador captura". Si fallara, se para y se consulta al usuario (la
-  alternativa con archivo de bloqueo cambia la spec).
+  alternativa con archivo de bloqueo cambia la spec). Pasa con OrbStack y,
+  desde el 2026-10-14, con Colima y montaje virtiofs. Con sshfs no es fiable,
+  y por eso el README exige virtiofs.
 - [`flock` sobre un descriptor de carpeta en macOS (`.venv`)] → Test
   unitario en el Mac; si no funcionase, se consulta.
 - [Tests existentes que preparan una captura previa y luego ingieren

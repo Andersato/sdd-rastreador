@@ -36,7 +36,8 @@ VPS (`add-vps-deployment`).
   comprobación con el resultado (captura guardada con su resumen, o el motivo
   por el que no se ha capturado). Con rotación para que no crezcan sin límite.
 - README: cómo activarlo, ver los logs, cambiar el intervalo, pararlo y
-  quitarlo; que OrbStack debe tener activado "Start at login"; cómo aceptar
+  quitarlo; que el entorno de Docker debe estar configurado para arrancar al
+  iniciar sesión; cómo aceptar
   una respuesta corta; y que no se lance la ingesta con `.venv` mientras el
   programador está activo.
 
@@ -77,7 +78,7 @@ VPS (`add-vps-deployment`).
    de 1 a 24; vacía o ausente vale 6; se aplica al volver a lanzar
    `docker compose up -d`.
 10. **Pruebas**: el programador admite otra URL de la API, solo para probarlo
-    contra un servidor local. Reinicio de OrbStack/ordenador y suspensión se
+    contra un servidor local. Reinicio del entorno de Docker/ordenador y suspensión se
     verifican a mano.
 11. **Valores concretos**: minuto 17; logs de como mucho 3 × 10 MB.
 12. **Un solo cambio**: el bloqueo y el filtro del 80 % van en este cambio,
@@ -89,7 +90,7 @@ VPS (`add-vps-deployment`).
 - Guardar solo los precios que cambian.
 - Alertas o notificaciones (correo, móvil…) cuando falla una captura: solo
   queda en los logs.
-- Arranque automático de OrbStack/Docker al iniciar sesión: es un ajuste de
+- Arranque automático del entorno de Docker al iniciar sesión: es un ajuste de
   la máquina que se documenta en el README, no se automatiza.
 - Más de una ingesta por comprobación o reintentos dentro de la misma
   comprobación.

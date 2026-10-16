@@ -3,8 +3,10 @@
 Escribe el crontab (una comprobación cada hora en el minuto 17), lanza
 supercronic y una comprobación inmediata, y se queda vigilándolos:
 
-- Recoge a los hijos que terminan y sale con el código de supercronic cuando
-  este termina (si muere por su cuenta, Docker reinicia el servicio).
+- Recoge a los hijos que terminan y, cuando ya no le queda ninguno, sale con
+  el código de supercronic (si muere por su cuenta, Docker reinicia el
+  servicio). Espera también a la comprobación de arranque, que no es trabajo
+  de supercronic, para que no muera a mitad del guardado.
 - Al recibir SIGTERM o SIGINT (`docker compose stop`) manda SIGTERM a todos
   los procesos del contenedor. supercronic lanza cada trabajo en su propio
   grupo de procesos y, al pararse, espera a que terminen sin avisarles: sin
@@ -66,13 +68,19 @@ def main(
     install(signal.SIGINT, stop_all)
     cron = popen([*SUPERCRONIC, CRONTAB_PATH])
     popen([sys.executable, "/app/container/check.py"])  # comprobación de arranque
+    # Al parar, supercronic sale sin esperar a la comprobación de arranque (no
+    # es trabajo suyo): se espera a todos los hijos antes de salir, porque al
+    # terminar el contenedor se matarían a mitad del ROLLBACK (D12).
+    code = None
     while True:
         try:
             pid, status = wait()
         except ChildProcessError:
-            return 1
+            return 1 if code is None else code
         if pid == cron.pid:
-            return os.waitstatus_to_exitcode(status)
+            code = os.waitstatus_to_exitcode(status)
+            if code < 0:  # muerto por una señal: 128 + número, como el shell (D8)
+                code = 128 - code
 
 
 if __name__ == "__main__":

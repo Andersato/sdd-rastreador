@@ -90,6 +90,32 @@ def test_activation_only_scheduler_with_host_user_and_startup_capture(project, h
     assert sorted(dir_state(project.data)) == ["prices.db"]
 
 
+def test_scheduled_ingestions_use_the_fixed_database(project, http_server):
+    """Escenario: Base de datos de las ingestas programadas (`ingestion-container`):
+    la captura de arranque va a ./data/prices.db
+    y no se crea ninguna otra base de datos, ni en ./data ni dentro del contenedor.
+
+    Las ingestas que se comprueban son la de arranque (la lanza scheduler.py) y
+    una comprobación horaria simulada con `exec` de check.py, el mismo comando
+    del crontab. Ninguna la dispara supercronic: esperar al minuto 17 no es
+    viable en un test."""
+    seed(project, hours_ago=7)
+    http_server.add_fixture("/api", "valid_two_stations.json")
+    project.start_scheduler(container_url(http_server, "/api"))
+    wait_logs(project, "captura guardada")
+    result = project.compose("exec", "-T", "-e", "CAPTURE_INTERVAL_HOURS=1", "scheduler",
+                             "python", "/app/container/check.py", timeout=120)
+    assert "no toca capturar" in result.stdout, result.stdout + result.stderr
+    assert snapshots(project) == 2
+    assert sorted(dir_state(project.data)) == ["prices.db"]
+    # Archivos *.db* creados después de arrancar (el crontab se escribe al arrancar),
+    # fuera de ./data (-xdev no entra en el montaje de /app/data).
+    found = project.compose("exec", "-T", "scheduler", "find", "/", "-xdev",
+                            "-name", "*.db*", "-newer", "/tmp/crontab", timeout=60)
+    assert found.stdout.split() == [], found.stdout + found.stderr
+    assert http_server.requests == {"/api": 1}
+
+
 def test_simulated_hourly_check_after_capture(project, http_server):
     """Comprobación horaria simulada: tras la captura de arranque, no toca."""
     http_server.add_fixture("/api", "valid_two_stations.json")
@@ -108,7 +134,8 @@ def test_simulated_hourly_check_after_capture(project, http_server):
     (None, 0, "no se permite ejecutar la ingesta con el grupo root"),
 ], ids=["usuario-root", "grupo-root"])
 def test_root_keeps_running_without_requests(project, http_server, uid, gid, reason):
-    """Escenarios: Usuario root y Grupo root (sigue en marcha, motivo repetido)."""
+    """Escenarios: Usuario root y Grupo root (sigue en marcha, motivo repetido), y
+    Programador configurado como root de `ingestion-container` (HOST_UID=0)."""
     project.write_env(uid=uid, gid=gid)
     http_server.add_fixture("/api", "valid_two_stations.json")
     before = dir_state(project.data)

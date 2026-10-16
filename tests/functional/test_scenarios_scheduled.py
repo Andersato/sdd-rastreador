@@ -38,14 +38,16 @@ def seeded(tmp_path, instant, data=None):
     return db
 
 
-def check(http_server, db, now, path="/api", body=None, fixture=None, status=200, **kwargs):
+def check(http_server, db, now, path="/api", body=None, fixture=None, status=200,
+          interval_arg=None, **kwargs):
+    extra = () if interval_arg is None else (f"--interval={interval_arg}",)
     if fixture is not None:
         url = http_server.add_fixture(path, fixture)
     elif body is not None:
         url = http_server.add(path, body=json.dumps(body), status=status)
     else:
         url = http_server.add(path, status=status, body=b"busy")
-    return run_check(url, db, now, "--accept-command", ACCEPT, **kwargs)
+    return run_check(url, db, now, "--accept-command", ACCEPT, *extra, **kwargs)
 
 
 def lines(result):
@@ -307,3 +309,34 @@ def test_scenario_march_time_change(http_server, tmp_path):
         assert lines(result)[0].startswith(f"{madrid} · ")
     assert snapshots(db) == 1
     assert http_server.total_requests() == 1
+
+
+# --- Intervalo configurable y recuperación ------------------------------------
+
+@pytest.mark.parametrize("interval", [" 6 ", "06"])
+def test_scenario_accepted_interval_forms(http_server, tmp_path, interval):
+    """Escenario: Formas admitidas (` 6 ` y `06` valen 6 horas): con la última
+    captura de hace 5 h no toca y con la de hace 5 h 45 min sí."""
+    db = seeded(tmp_path, "2026-10-12T07:17:00Z")
+    result = check(http_server, db, "2026-10-12T12:17:00Z", path="/a",
+                   fixture="valid_two_stations.json", interval_arg=interval)
+    assert lines(result) == [
+        "2026-10-12 14:17:00 CEST · no toca capturar: última captura hace 5 h 0 min (intervalo 6 h)"
+    ]
+    result = check(http_server, db, "2026-10-12T13:02:00Z", path="/b",
+                   body=stations_with_price(10), interval_arg=interval)
+    assert lines(result)[0].startswith("2026-10-12 15:02:00 CEST · captura guardada "
+                                       "(última captura hace 5 h 45 min, intervalo 6 h)")
+    assert http_server.requests == {"/b": 1}
+
+
+def test_scenario_recovery_after_restart(http_server, tmp_path):
+    """Escenario: Recuperación tras un reinicio: última captura a las 02:17 de
+    Madrid y comprobación de arranque a las 11:05 → captura sin esperar a las 11:17."""
+    db = seeded(tmp_path, "2026-10-12T00:17:00Z")
+    result = check(http_server, db, "2026-10-12T09:05:00Z", body=stations_with_price(10))
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert lines(result)[0].startswith("2026-10-12 11:05:00 CEST · captura guardada "
+                                       "(última captura hace 8 h 48 min, intervalo 6 h)")
+    assert snapshots(db) == 2
+    assert http_server.requests == {"/api": 1}

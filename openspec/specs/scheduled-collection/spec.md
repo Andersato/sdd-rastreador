@@ -1,4 +1,4 @@
-# Spec Delta
+# scheduled-collection Specification
 
 ## Purpose
 
@@ -6,7 +6,7 @@ Recoger capturas de precios de forma automática y periódica con un servicio
 programador que se arranca una vez y sobrevive a reinicios y suspensiones
 del ordenador, sin pedir a la API más de lo necesario.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Servicio programador que se arranca una vez
 `docker compose up -d` SHALL arrancar un servicio programador que se queda en
@@ -19,11 +19,11 @@ salvo que el usuario lo haya parado con `docker compose stop` o `down`.
 - **THEN** queda en marcha un único contenedor, el del programador, ejecutándose con usuario 501 y grupo 20, y no se crea ningún contenedor del servicio `ingest`
 
 #### Scenario: Reinicio de Docker (verificación manual)
-- **WHEN** el programador está en marcha, se reinicia OrbStack (o el ordenador, con "Start at login" activado) y se espera a que Docker vuelva a estar disponible
+- **WHEN** el programador está en marcha, se reinicia el entorno de Docker (o el ordenador, con el entorno de Docker configurado para arrancar al iniciar sesión) y se espera a que Docker vuelva a estar disponible
 - **THEN** `docker compose ps` muestra el programador en marcha sin que el usuario haya lanzado nada, y `docker compose logs` muestra la comprobación de arranque
 
 #### Scenario: Parado por el usuario (verificación manual)
-- **WHEN** el usuario lanza `docker compose stop` y después reinicia OrbStack
+- **WHEN** el usuario lanza `docker compose stop` y después reinicia el entorno de Docker
 - **THEN** `docker compose ps` muestra el programador parado y `./data/prices.db` no tiene ninguna captura nueva
 
 ### Requirement: Configuración no válida
@@ -282,10 +282,10 @@ mismas garantías que define `ingestion-container` para una interrupción.
 
 ### Requirement: Documentación del programador
 El README SHALL explicar cómo activar el programador, ver sus logs, cambiar
-el intervalo, pararlo y quitarlo; que OrbStack debe tener activado "Start at
-login"; cómo reconocer y aceptar una respuesta corta; y que no se debe
+el intervalo, pararlo y quitarlo; que el entorno de Docker debe estar
+configurado para arrancar al iniciar sesión; cómo reconocer y aceptar una respuesta corta; y que no se debe
 lanzar la ingesta con `.venv` mientras el programador está activo.
 
 #### Scenario: Instrucciones en el README
 - **WHEN** se lee la sección del programador del README
-- **THEN** incluye `docker compose up -d`, `docker compose logs`, `docker compose stop`, `docker compose down`, `CAPTURE_INTERVAL_HOURS` (y que tras cambiarlo hay que volver a lanzar `docker compose up -d`), el ajuste "Start at login" de OrbStack, `docker compose run --rm ingest --accept-short-response`, el aviso de no usar `.venv` con el programador activo y la URL de la API para pruebas, presentada solo como herramienta de pruebas
+- **THEN** incluye `docker compose up -d`, `docker compose logs`, `docker compose stop`, `docker compose down`, `CAPTURE_INTERVAL_HOURS` (y que tras cambiarlo hay que volver a lanzar `docker compose up -d`), cómo configurar el entorno de Docker para que arranque al iniciar sesión, `docker compose run --rm ingest --accept-short-response`, el aviso de no usar `.venv` con el programador activo y la URL de la API para pruebas, presentada solo como herramienta de pruebas

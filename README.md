@@ -89,8 +89,18 @@ Así la ingesta se lanza igual en el Mac y en un Linux, sin instalar Python.
 
 ### Requisitos
 
-Docker con Compose v2 (Docker Desktop u OrbStack en macOS, Docker Engine en
-Linux).
+Docker con Compose v2: Colima en macOS, Docker Engine en Linux.
+
+En macOS, Colima tiene que usar el montaje **virtiofs**, no sshfs. Con sshfs
+los bloqueos de archivos no son fiables, y tanto SQLite como el bloqueo que
+evita dos capturas a la vez dependen de ellos. Compruébalo con:
+
+```sh
+colima status        # debe mostrar «mountType: virtiofs»
+```
+
+Si muestra `sshfs`, pon `vmType: vz` y `mountType: virtiofs` en
+`~/.colima/default/colima.yaml` y reinicia Colima (`colima restart`).
 
 ### Preparar (una vez por máquina)
 
@@ -164,9 +174,14 @@ Se hace **una vez**: Docker lo vuelve a arrancar solo al reiniciar el
 ordenador o Docker (salvo que lo hayas parado tú). `docker compose up -d`
 arranca solo el programador; no lanza una captura manual.
 
-En macOS, OrbStack tiene que arrancar solo al iniciar sesión: en OrbStack,
-**Settings → General → Start at login** activado. Si no, tras reiniciar el
-Mac no habrá capturas hasta que abras OrbStack.
+En macOS, Colima tiene que arrancar solo al iniciar sesión:
+
+```sh
+brew services start colima
+```
+
+`brew services list` debe mostrar `colima` como `started`. Si no, tras
+reiniciar el Mac no habrá capturas hasta que lances `colima start`.
 
 ### Qué hace
 
