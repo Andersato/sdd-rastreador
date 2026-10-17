@@ -5,7 +5,7 @@ import sqlite3
 
 import pytest
 
-from tests.api_helpers import assert_error, make_client, priced, save
+from tests.api_helpers import folder_state, assert_error, make_client, priced, save
 
 PATH = "/api/provinces/prices?fuel=gasoleo-a"
 
@@ -85,11 +85,6 @@ def test_missing_fuel(db):
     """Escenario: Falta el combustible."""
     save(db, priced("1", {"Gasoleo A": "1,459"}))
     assert_error(make_client(db).get("/api/provinces/prices"), 422, "parametro_no_valido")
-
-
-def folder_state(folder):
-    return {p.name: (p.stat().st_size, p.stat().st_mtime_ns, p.read_bytes())
-            for p in sorted(folder.iterdir())}
 
 
 def test_many_requests_do_not_change_data(db):

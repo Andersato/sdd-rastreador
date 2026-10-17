@@ -16,10 +16,6 @@ def unavailable(code: str, message: str, headers: dict | None = None) -> ApiErro
     return ApiError(503, code, message, headers)
 
 
-def invalid_parameter(message: str) -> ApiError:
-    return ApiError(422, "parametro_no_valido", message)
-
-
 def unknown_fuel(value: str) -> ApiError:
     return ApiError(422, "combustible_desconocido",
                     f"combustible desconocido: {value!r}; los identificadores válidos "

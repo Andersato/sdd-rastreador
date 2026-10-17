@@ -553,8 +553,9 @@ después de «ZAMORA»).
 ### Requirement: Log de la API limitado y sin ubicaciones exactas
 El log del servicio `api` SHALL tener una línea por petición (hora de Madrid,
 método, ruta, parámetros y código de respuesta), con las coordenadas de las
-búsquedas redondeadas a 2 decimales, y MUST quedarse como mucho en 3
-archivos de 10 MB, como el del programador.
+búsquedas redondeadas a 2 decimales, solo los parámetros de la ruta y sin
+caracteres de control, y MUST quedarse como mucho en 3 archivos de 10 MB,
+como el del programador.
 
 #### Scenario: Búsqueda en el log
 - **WHEN** se pide `GET /api/stations/nearby?lat=40.416775&lon=-3.703790&fuel=gasoleo-a` y responde 200
@@ -563,6 +564,14 @@ archivos de 10 MB, como el del programador.
 #### Scenario: Coordenadas no válidas en el log
 - **WHEN** se pide `GET /api/stations/nearby?lat=40,416775&lon=-3.703790&fuel=gasoleo-a` y responde 422
 - **THEN** la línea del log no contiene el valor recibido de `lat` ni `-3.703790`
+
+#### Scenario: Parámetros que la ruta no conoce
+- **WHEN** se pide `GET /api/stations/nearby?latitude=40.416775&lat=40.4168&lon=-3.7038&fuel=gasoleo-a`
+- **THEN** la línea del log tiene `lat=40.42`, `lon=-3.70` y `fuel=gasoleo-a`, resume el resto como `(otros: 1)` sin su nombre ni su valor, y `40.416775` no aparece en el log
+
+#### Scenario: Caracteres de control en la petición
+- **WHEN** se pide `GET /api/provinces/prices?fuel=x%0A2026-10-16%2011:30:02%20CEST` (un salto de línea dentro del valor)
+- **THEN** el log tiene una sola línea para esa petición, con el salto de línea escrito como `\n`, y ninguna línea falsa que empiece por `2026-10-16 11:30:02 CEST`
 
 #### Scenario: Rotación
 - **WHEN** se lanza `docker compose config`

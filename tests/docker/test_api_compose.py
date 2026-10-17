@@ -55,6 +55,16 @@ def test_api_log_rotation(config):
     assert logging["options"] == {"max-size": "10m", "max-file": "3"}
 
 
+def test_vps_env_gives_user_1000_to_scheduler_and_api(config):
+    """Escenarios: Arranque en el VPS (los dos servicios con usuario 1000 y grupo 1000
+    del `.env` del VPS) y Configuración de Compose (servicios que arrancan)."""
+    data, _ = config
+    started = {name for name, service in data["services"].items() if "profiles" not in service}
+    assert started == {"api", "scheduler"}
+    assert {name: data["services"][name]["user"] for name in started} == {
+        "api": "1000:1000", "scheduler": "1000:1000"}
+
+
 def test_api_service_settings(config):
     data, _ = config
     api = data["services"][API]

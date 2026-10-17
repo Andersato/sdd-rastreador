@@ -9,9 +9,10 @@ destinos que no pueden llegar a la API real), porque el bloqueo de red de
 
 import json
 import os
+import urllib.error
+import urllib.request
 import secrets
 import shutil
-import socket
 import sqlite3
 import subprocess
 import time
@@ -19,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-from tests.helpers import REPO_ROOT
+from tests.helpers import REPO_ROOT, free_port
 
 IMAGE = "precios-gasolineras-ingest"  # la del proyecto real: los tests no la tocan
 TEST_IMAGE = "precios-gasolineras-ingest-test"
@@ -308,6 +309,33 @@ class Project:
         return subprocess.Popen(["docker", *run], env=docker_env(), cwd=self.root,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
+    def api_get(self, path, timeout=5):
+        """(código, cuerpo JSON) de la API del proyecto; excepción si no conecta."""
+        try:
+            with urllib.request.urlopen(self.api_url + path, timeout=timeout) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            return exc.code, json.loads(exc.read())
+
+    def api_answers(self) -> bool:
+        try:
+            self.api_get("/api/health", timeout=2)
+            return True
+        except (OSError, ValueError):
+            return False
+
+    def wait_api(self, timeout=60) -> None:
+        deadline = time.monotonic() + timeout
+        while not self.api_answers():
+            if time.monotonic() > deadline:
+                raise AssertionError(f"la API no responde en {self.api_url}:\n{self.api_logs()}")
+            time.sleep(0.2)
+
+    def start_services(self, server, **environment) -> None:
+        """`docker compose up -d` (programador y API) con el programador contra `server`."""
+        result = self.start_scheduler(container_url(server, "/api"), environment=environment)
+        assert result.returncode == 0, result.stderr
+
     def api_logs(self) -> str:
         result = self.compose("logs", "--no-log-prefix", API, timeout=60)
         return result.stdout + result.stderr
@@ -318,12 +346,6 @@ class Project:
         result = self.compose("down", "--remove-orphans", timeout=120,
                               env={"HOST_UID": "1", "HOST_GID": "1"})
         assert result.returncode == 0, result.stderr
-
-
-def free_port() -> int:
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
 
 
 def with_api_port(compose: str, port: int) -> str:

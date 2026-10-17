@@ -55,13 +55,13 @@
 ## 9. Mediciones y verificaciones manuales
 
 - [x] 9.1 Escribir `tools/perf/make_year_db.py` y `tools/perf/measure.py` (D13) con tests unitarios de que `make_year_db.py` rechaza un destino existente, un destino o una copia bajo `./data`, y no modifica la copia de origen; verificar que pasan.
-- [ ] 9.2 Dar al usuario los comandos exactos para: descomprimir `~/Backups/precios-gasolineras/prices-2026-10-17.db.gz` en una carpeta temporal nueva, comprobar «Datos reales (verificación manual)» de `/api/fuels` contra una consulta directa a esa copia, generar la base de un año (aviso de 4–5 GB), medir y borrarla; con los resultados que pase, apuntarlos en «Mediciones» de design.md y comprobar que todas las rutas quedan por debajo de 1 s.
-- [ ] 9.3 Dar al usuario los comandos del runbook para actualizar el VPS, las comprobaciones de puerto y `ufw`, el acceso desde fuera sin túnel, el túnel, `/api/docs` en el navegador y la medición con la duración del log; apuntar en design.md los resultados que pase. Ningún agente se conecta al VPS.
-- [ ] 9.4 Con el usuario, tras el siguiente `sudo reboot` del VPS (o el reinicio automático), comprobar «Reinicio del VPS» de la API; si no ocurre antes de archivar, dejarlo en «Workflow follow-up».
+- [x] 9.2 Dar al usuario los comandos exactos para: descomprimir `~/Backups/precios-gasolineras/prices-2026-10-17.db.gz` en una carpeta temporal nueva, comprobar «Datos reales (verificación manual)» de `/api/fuels` contra una consulta directa a esa copia, generar la base de un año (aviso de 4–5 GB), medir y borrarla; con los resultados que pase, apuntarlos en «Mediciones» de design.md y comprobar que todas las rutas quedan por debajo de 1 s.
+- [x] 9.3 Dar al usuario los comandos del runbook para actualizar el VPS, las comprobaciones de puerto y `ufw`, el acceso desde fuera sin túnel, el túnel, `/api/docs` en el navegador y la medición con la duración del log; apuntar en design.md los resultados que pase. Ningún agente se conecta al VPS.
+- [x] 9.4 Con el usuario, tras el siguiente `sudo reboot` del VPS (o el reinicio automático), comprobar «Reinicio del VPS» de la API; si no ocurre antes de archivar, dejarlo en «Workflow follow-up».
 
 ## 10. Verificación final
 
-- [ ] 10.1 Ejecutar `python -m pytest` completo (incluidos los tests Docker) y `openspec validate add-prices-api --strict`; verificar que todo pasa y que `git status` no muestra nada en `data/` ni `backups/`.
+- [x] 10.1 Ejecutar `python -m pytest` completo (incluidos los tests Docker) y `openspec validate add-prices-api --strict`; verificar que todo pasa y que `git status` no muestra nada en `data/` ni `backups/`.
 
 ## Workflow follow-up
 

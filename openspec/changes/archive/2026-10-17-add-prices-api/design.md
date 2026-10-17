@@ -79,7 +79,8 @@ Cada petición de datos hace:
    compartido; si hay un bloqueo exclusivo, SQLite reintenta hasta 2 s
    (`base_ocupada`, 503, `Retry-After: 5`).
 4. A partir de ahí, todas las consultas de la petición dentro de la misma
-   transacción (D3) y `COMMIT` + `close()` antes de construir la respuesta.
+   transacción (D3) y `ROLLBACK` + `close()` antes de construir la respuesta
+   (para una lectura, `ROLLBACK` y `COMMIT` dan lo mismo).
 
 Errores traducidos (después de coger el candado): `SQLITE_BUSY` → `base_ocupada`; 776 →
 `recogida_a_medias`; `SQLITE_NOTADB` o cualquier otro error al abrir/leer la
@@ -209,8 +210,13 @@ terminarla:
 `2026-10-16 11:30:02 CEST · GET /api/stations/nearby lat=40.42 lon=-3.70 fuel=gasoleo-a → 200 (14 ms)`
 
 `lat` y `lon` se redondean a 2 decimales si son números finitos y, si no, se
-escriben como `(no válido)`; otros parámetros se escriben tal cual, cortados
-a 40 caracteres. La duración sirve para la medición en el VPS (D13). El log
+escriben como `(no válido)`. Solo se escriben los parámetros que existen en
+alguna ruta (`lat`, `lon`, `fuel`, `radius_km`, `limit`), cortados a 40
+caracteres; el resto se resume como `(otros: N)`, sin nombre ni valor, porque
+podría ser una ubicación exacta con otro nombre (`latitude=…`). Los
+caracteres de control de los valores y de la ruta se escriben escapados
+(`\n`), para que una petición no pueda fabricar líneas falsas en el log
+(las dos cosas, a propuesta del code-reviewer). La duración sirve para la medición en el VPS (D13). El log
 de acceso de uvicorn está desactivado para que nunca escriba la consulta
 original. La rotación (3 × 10 MB) la hace Docker.
 
@@ -335,5 +341,47 @@ Vuelta atrás: `git checkout <versión anterior>`, `docker compose build` y
 
 ## Mediciones
 
-Se completará durante la implementación (D13): Mac con base sintética de un
-año y VPS con la base real.
+**Mac, 2026-10-17 (tarea 9.2).** Copia `prices-2026-10-17.db.gz`
+descomprimida en una carpeta temporal de `/tmp`; su `shasum` fue el mismo
+antes y después (`bd62895a…`): la API no la modificó.
+
+- `/api/fuels` sobre la copia (200, 27 ms) coincide exactamente con la
+  consulta directa a su última captura en los 21 combustibles con
+  estaciones (por ejemplo, Gasoleo A 11.232, Gasolina 95 E5 10.890,
+  Hidrogeno 2, Gasolina 95 E25 1).
+- Base sintética de un año: 1.460 capturas, **4,6 GB** (por encima de la
+  estimación de «unos 4 GB al año» del runbook, ya corregida en su cálculo
+  de espacio para las copias: unas 5 veces la base, unos 23 GB al año).
+- `measure.py`, 20 peticiones por ruta:
+
+| Ruta | Máximo | Media |
+|---|---|---|
+| `/api/health` | 17,0 ms | 13,6 ms |
+| `/api/fuels` | 16,0 ms | 13,9 ms |
+| `/api/stations/nearby` (Madrid, `gasoleo-a`, 50 km, límite 100) | 56,7 ms | 50,1 ms |
+| `/api/stations/{station_id}` | 6,5 ms | 4,0 ms |
+| `/api/provinces/prices` | 43,5 ms | 36,4 ms |
+
+Todas muy por debajo de 1 s: con un año de datos no hacen falta índices
+para las consultas de la última captura. La base sintética se borró.
+
+**VPS, 2026-10-17 (tareas 9.3 y 9.4).** Tras la copia a mano, `git pull`,
+`build` y `up -d`: la salud dio `ok` con la captura de las 13:17:02Z;
+`ss -tlnp` solo mostró `127.0.0.1:8000` (`docker-proxy`), y `ufw` seguía
+solo con OpenSSH (v4 y v6). Desde el Mac, sin túnel, no se llega; con el
+túnel, `/api/docs` funciona en el navegador.
+
+Tiempos en el servidor, sin la red (log de la API):
+
+| Ruta | Tiempo |
+|---|---|
+| `/api/health` | 17–27 ms |
+| `/api/fuels` | 17–31 ms |
+| `/api/stations/nearby` (radio 50 km, límite 100) | 93–157 ms |
+| `/api/stations/{station_id}` | 2 ms |
+| `/api/provinces/prices` | 63–82 ms |
+
+A través del túnel, con la red, el máximo fue 472,6 ms (cercanas). El log
+mostraba las coordenadas redondeadas a 2 decimales. Tras `sudo reboot`, la
+API y el programador volvieron solos (`Up 3 minutes`) y la API seguía
+publicada solo en `127.0.0.1`.

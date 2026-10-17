@@ -16,16 +16,11 @@ import pytest
 from src.api.db import read_snapshot
 from src.api.errors import ApiError
 from src.ingestion.storage import SCHEMA
-from tests.api_helpers import CAPTURE_AT, basic_db, hold_lock, priced, save
+from tests.api_helpers import folder_state, CAPTURE_AT, basic_db, hold_lock, priced, save
 from tests.helpers import db_dump
 from tests.storage_helpers import make_pending_journal
 
 UTC = timezone.utc
-
-
-def folder_state(folder):
-    return {p.name: (p.stat().st_size, p.stat().st_mtime_ns, p.read_bytes())
-            for p in sorted(folder.iterdir())}
 
 
 def read_capture(db, **kwargs):

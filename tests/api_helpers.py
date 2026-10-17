@@ -23,6 +23,12 @@ ATTRIBUTION = ("Ministerio de Industria, Comercio y Turismo - Precios de carbura
                "en estaciones de servicio")
 
 
+def folder_state(folder) -> dict:
+    """Nombre, tamaño, fecha de modificación y contenido de cada archivo de `folder`."""
+    return {p.name: (p.stat().st_size, p.stat().st_mtime_ns, p.read_bytes())
+            for p in sorted(Path(folder).iterdir())}
+
+
 def coords(lat: float, lon: float) -> dict:
     """Coordenadas con el formato de la API (coma decimal)."""
     return {"Latitud": f"{lat}".replace(".", ","), "Longitud (WGS84)": f"{lon}".replace(".", ",")}

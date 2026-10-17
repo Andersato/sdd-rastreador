@@ -1,8 +1,11 @@
 """Una línea de log por petición, sin ubicaciones exactas (design.md, D10).
 
 `lat` y `lon` se escriben redondeados a 2 decimales (o `(no válido)`), para no
-guardar dónde está quien busca. El log de acceso de uvicorn va desactivado:
-escribiría la consulta original.
+guardar dónde está quien busca. Solo se escriben los parámetros que existen
+en alguna ruta; el resto se resume como `(otros: N)`, sin nombre ni valor
+(podría ser una ubicación con otro nombre). Los caracteres de control se
+escriben escapados (`\\n`), para que nadie pueda fabricar líneas falsas. El
+log de acceso de uvicorn va desactivado: escribiría la consulta original.
 """
 
 import math
@@ -15,7 +18,13 @@ from fastapi import FastAPI, Request
 from src.ingestion.scheduled import madrid_time
 
 COORDINATES = ("lat", "lon")
+KNOWN_PARAMETERS = ("lat", "lon", "fuel", "radius_km", "limit")
 MAX_VALUE_CHARS = 40
+
+
+def printable(text: str) -> str:
+    """Caracteres de control escapados: `\\n`, `\\t`, `\\x00`…"""
+    return "".join(c if c.isprintable() else repr(c)[1:-1] for c in text)
 
 
 def coordinate_text(value: str) -> str:
@@ -30,15 +39,22 @@ def coordinate_text(value: str) -> str:
 
 def parameters_text(items) -> str:
     parts = []
+    others = 0
     for key, value in items:
-        shown = coordinate_text(value) if key in COORDINATES else value[:MAX_VALUE_CHARS]
-        parts.append(f"{key[:MAX_VALUE_CHARS]}={shown}")
+        if key not in KNOWN_PARAMETERS:
+            others += 1
+            continue
+        shown = coordinate_text(value) if key in COORDINATES else printable(value[:MAX_VALUE_CHARS])
+        parts.append(f"{key}={shown}")
+    if others:
+        parts.append(f"(otros: {others})")
     return " ".join(parts)
 
 
 def access_line(now: datetime, method: str, path: str, items, status: int,
                 elapsed_s: float) -> str:
     params = parameters_text(items)
+    path = printable(path)
     target = f"{path} {params}" if params else path
     return f"{madrid_time(now)} · {method} {target} → {status} ({elapsed_s * 1000:.0f} ms)"
 

@@ -364,11 +364,13 @@ df -h /                     # espacio libre
 11), cuando el histórico ya está en su sitio.
 
 **Espacio en disco.** El disco es de 240 GB. La base ocupa unos 3 MB por
-captura (25,5 MB con 8 capturas el 2026-10-16; con 4 capturas al día,
-algo más de 4 GB al año). Cada copia comprimida ocupa alrededor de un tercio
-de la base (7,9 MB para esos 25,5 MB). Hace falta sitio para la base, para
-**un volcado temporal del mismo tamaño** mientras se hace una copia y para
-**11 copias comprimidas**: en total, unas 5 veces el tamaño de la base.
+captura (25,5 MB con 8 capturas el 2026-10-16). Con 4 capturas al día, una
+base sintética de un año (1.460 capturas) ocupó **4,6 GB** (medido el
+2026-10-17, `add-prices-api`). Cada copia comprimida ocupa alrededor de un
+tercio de la base (7,9 MB para esos 25,5 MB). Hace falta sitio para la base,
+para **un volcado temporal del mismo tamaño** mientras se hace una copia y
+para **11 copias comprimidas**: en total, unas 5 veces el tamaño de la base
+(unos 23 GB al cabo de un año).
 `df -h /` antes del primer arranque y en cada actualización.
 
 ## 10. Clave del Mac para las copias (solo lectura con `rrsync`)
@@ -634,5 +636,5 @@ docker compose logs --tail 40 api
 | 2026-10-17 | Reinicio del VPS tras la sección 5 | ✓ `swapon --show` igual tras reiniciar. El programador volvió solo (`Up About a minute`); a las 10:38:29, `programador en marcha … recogida activada` y `no toca capturar: última captura hace 1 h 21 min`. No repitió la copia (la de hoy tenía menos de 26 h). |
 | | Primera copia diaria de las 04:43 (2026-10-18): `docker compose logs scheduler \| grep '2026-10-18 04:4'` muestra `copia guardada: prices-2026-10-18.db.gz` | pendiente (posterior al archivo) |
 | | Recuperación tras un reinicio automático de `unattended-upgrades` a las 05:30 | pendiente: se comprueba cuando ocurra (posterior al archivo) |
-| | Actualización a la versión con la API (sección 13) y túnel (sección 14) | pendiente |
+| 2026-10-17 | Actualización a la versión con la API (sección 13) y túnel (sección 14) | ✓ Salud `ok` (captura de las 13:17:02Z). `ss -tlnp`: solo `127.0.0.1:8000`. `ufw`: solo OpenSSH. Sin túnel, desde el Mac no se llega; con túnel, `/api/docs` funciona. Tiempos en el servidor: 2–157 ms. Tras `sudo reboot`, `api` y `scheduler` volvieron solos (`Up 3 minutes`). |
 | 2026-10-17 | Actualización a la versión con copias (sección 13), commit `ee22b24` | ✓ Copia previa en solo lectura: `ok`, 12 capturas (8 del Mac + 15:17, 21:17, 03:17 y 09:17 del VPS). Arranque a las 10:15:54 con `recogida activada`; la comprobación de arranque hizo la primera copia (regla de 26 h, no había ninguna): `prices-2026-10-17.db.gz (11,5 MB, 12 capturas, integridad correcta)`. Copia a mano a las 10:18:34, igual. `backups/prices-2026-10-17.db.gz` a nombre de `deploy` (1000:1000 en este VPS). |

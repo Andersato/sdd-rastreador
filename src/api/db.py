@@ -121,12 +121,19 @@ class Reader:
 
     def all(self, sql: str, params=()) -> list[tuple]:
         self.check()
-        try:
-            rows = self._conn.execute(sql, params).fetchall()
-        except sqlite3.Error as exc:
-            raise translate(exc) from exc
+        rows = _fetch(self._conn, sql, params)
         self.check()
         return rows
+
+
+def _fetch(conn: sqlite3.Connection, sql: str, params=()) -> list[tuple]:
+    try:
+        return conn.execute(sql, params).fetchall()
+    except sqlite3.Error as exc:
+        translated = translate(exc)
+        if isinstance(translated, ApiError):
+            raise translated from exc
+        raise
 
 
 def translate(exc: sqlite3.Error) -> ApiError | sqlite3.Error:
@@ -181,18 +188,17 @@ def _read(db_path: Path, busy_timeout_s: float, read_limit_s: float,
             raise _opening_error(exc) from exc
         deadline = monotonic() + read_limit_s
         conn.set_progress_handler(lambda: 1 if monotonic() > deadline else 0, PROGRESS_STEPS)
-        reader = Reader(conn, None, deadline, monotonic)
         if version == 0:
             raise no_snapshots()
         if version != SCHEMA_VERSION:
             raise incompatible(version)
-        rows = reader.all(
-            "SELECT id, downloaded_at, source_date FROM snapshots ORDER BY id DESC LIMIT 1")
+        rows = _fetch(conn,
+                      "SELECT id, downloaded_at, source_date FROM snapshots ORDER BY id DESC LIMIT 1")
         if not rows:
             raise no_snapshots()
         snapshot_id, downloaded_at, source_date = rows[0]
-        reader.capture = Capture(snapshot_id, parse_utc(downloaded_at), source_date)
-        yield reader
+        capture = Capture(snapshot_id, parse_utc(downloaded_at), source_date)
+        yield Reader(conn, capture, deadline, monotonic)
     finally:
         _close(conn)
 

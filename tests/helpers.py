@@ -20,6 +20,13 @@ def check_not_real_data(db) -> None:
         raise ValueError(f"los tests no pueden usar la carpeta data/ real: {db}")
 
 
+def free_port() -> int:
+    """Un puerto local libre en este momento."""
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
 def closed_port_url(path: str = "/api") -> str:
     """URL local a un puerto sin nadie escuchando: la conexión se rechaza."""
     sock = socket.socket()

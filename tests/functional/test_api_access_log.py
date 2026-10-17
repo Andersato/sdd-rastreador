@@ -91,3 +91,35 @@ def test_non_numeric_coordinates(value):
 def test_long_values_are_cut():
     line = access_line(datetime.now(timezone.utc), "GET", "/x", [("fuel", "x" * 500)], 422, 0)
     assert "fuel=" + "x" * 40 + " " in line
+
+
+def test_unknown_parameters_are_summarised(db, lines):
+    """Escenario: Parámetros que la ruta no conoce."""
+    client = make_client(db, log_line=lines.append)
+    client.get("/api/stations/nearby?latitude=40.416775&lat=40.4168&lon=-3.7038&fuel=gasoleo-a")
+    line = lines[0]
+    assert "lat=40.42" in line and "lon=-3.70" in line and "fuel=gasoleo-a" in line
+    assert "(otros: 1)" in line
+    assert "latitude" not in line and "40.416775" not in line
+
+
+def test_control_characters_are_escaped(db, lines):
+    """Escenario: Caracteres de control en la petición."""
+    client = make_client(db, log_line=lines.append)
+    client.get("/api/provinces/prices?fuel=x%0A2026-10-16%2011:30:02%20CEST")
+    assert len(lines) == 1
+    log = "\n".join(lines)
+    assert log.count("\n") == 0
+    assert "fuel=x\\n2026-10-16 11:30:02 CEST" in lines[0]
+    assert not any(line.startswith("2026-10-16 11:30:02 CEST") for line in log.splitlines())
+
+
+def test_control_characters_in_the_path_are_escaped():
+    line = access_line(datetime.now(timezone.utc), "GET", "/api/stations/1\r\nfalsa", [], 404, 0)
+    assert "\n" not in line and "\r" not in line
+    assert "/api/stations/1\\r\\nfalsa" in line
+
+
+def test_accented_values_are_kept():
+    line = access_line(datetime.now(timezone.utc), "GET", "/x", [("fuel", "diésel")], 422, 0)
+    assert "fuel=diésel" in line

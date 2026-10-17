@@ -9,7 +9,6 @@ medio, se guarda una captura.
 
 import json
 import os
-import socket
 import subprocess
 import sys
 import threading
@@ -19,7 +18,7 @@ import urllib.request
 
 from tests.api_helpers import CAPTURE_AT, priced
 from tests.builders import response
-from tests.helpers import REPO_ROOT, run_cli
+from tests.helpers import REPO_ROOT, free_port, run_cli
 from tests.storage_helpers import ingest, query
 
 STATIONS = 2000
@@ -33,12 +32,6 @@ from src.api.app import create_app
 app = create_app(Path(sys.argv[1]), log_line=lambda line: None)
 uvicorn.run(app, host="127.0.0.1", port=int(sys.argv[2]), log_level="warning")
 """
-
-
-def free_port():
-    with socket.socket() as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
 
 
 def get(url):

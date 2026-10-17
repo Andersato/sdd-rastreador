@@ -17,7 +17,7 @@ copia a mano.
 
 #### Scenario: Activación
 - **WHEN** existen `.env` con `HOST_UID=501`, `HOST_GID=20` y `COLLECTION_ENABLED=true`, y las carpetas `./data` y `./backups`, y se lanza `docker compose up -d`
-- **THEN** queda en marcha un único contenedor, el del programador, ejecutándose con usuario 501 y grupo 20, y no se crea ningún contenedor del servicio `ingest` ni del de la copia a mano
+- **THEN** quedan en marcha exactamente dos contenedores, el del programador y el de la API de `prices-api`, los dos con usuario 501 y grupo 20, y no se crea ningún contenedor del servicio `ingest` ni del de la copia a mano
 
 #### Scenario: Reinicio de Docker (verificación manual)
 - **WHEN** el programador está en marcha, se reinicia el entorno de Docker (o el ordenador, con el entorno de Docker configurado para arrancar al iniciar sesión) y se espera a que Docker vuelva a estar disponible
