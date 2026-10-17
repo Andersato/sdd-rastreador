@@ -8,8 +8,9 @@
 Antes comprueba, en este orden: usuario root, grupo root, valor de
 `COLLECTION_ENABLED` y desactivada (el intervalo no cuenta: solo afecta a la
 captura). Códigos de salida: 0 copia correcta, 1 error, 2 configuración no
-válida o copias desactivadas, 3 otra ingesta o copia en curso, 130
-interrumpida.
+válida o (con `--manual`) copias desactivadas, 3 otra ingesta o copia en
+curso, 130 interrumpida. Con `--daily` y las copias desactivadas termina con
+0: no es un error (supercronic registraría uno cada día en el Mac).
 """
 
 import argparse
@@ -55,7 +56,7 @@ def main(uid: int, gid: int, env: dict[str, str], argv: list[str], run=run_backu
     blocker = backup_blocker(uid, gid, env)
     if blocker is not None:
         print(f"{madrid_time(clock())} · {blocker}", flush=True)
-        return EXIT_REFUSED
+        return 0 if args.daily and blocker == DISABLED else EXIT_REFUSED
     marker = Path(MARKER) if args.daily else None
     try:
         with sigterm_as_interrupt():

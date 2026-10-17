@@ -23,7 +23,7 @@ from backup import BACKUPS_DIR, MARKER, backup_blocker
 from entrypoint import DB_PATH, refusal
 from settings import ENABLE_HINT, InvalidSetting, parse_enabled
 from src.backup.scheduled import retry_pending, run_backup, startup_due
-from src.ingestion.lock import sigterm_as_interrupt
+from src.ingestion.lock import sigterm_as_interrupt, sigterm_received
 from src.ingestion.scheduled import InvalidInterval, madrid_time, parse_interval
 from src.ingestion.scheduled import main as scheduled_main
 
@@ -92,7 +92,10 @@ def main(uid: int, gid: int, env: dict[str, str], run=scheduled_main, now=None,
         print(f"{madrid_time(clock())} · {line}", flush=True)
     else:
         code = run(check_args(env))
-    after(uid, gid, env, startup, clock)
+    # Parada (SIGTERM) durante la ingesta: no se empieza ninguna copia. La señal
+    # ya se ha consumido y Docker mataría la copia a medias.
+    if not sigterm_received():
+        after(uid, gid, env, startup, clock)
     return code
 
 

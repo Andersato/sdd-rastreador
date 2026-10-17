@@ -14,6 +14,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CHUNK = 1024 * 1024
+PROGRESS_STEPS = 10_000  # instrucciones de SQLite entre llamadas a la función de progreso
+
+
+def _progress() -> int:
+    """Función de Python durante `integrity_check`: entre llamadas se atiende SIGTERM.
+
+    Si la señal llega aquí (como KeyboardInterrupt), SQLite aborta la consulta
+    con "interrupted" y `inspect_db` vuelve a lanzar la interrupción.
+    """
+    return 0
 
 
 class VerificationError(Exception):
@@ -35,6 +45,7 @@ def inspect_db(path: Path) -> DbInfo:
     conn = None
     try:
         conn = sqlite3.connect(Path(path).resolve().as_uri() + "?mode=ro", uri=True, timeout=1)
+        conn.set_progress_handler(_progress, PROGRESS_STEPS)
         result = conn.execute("PRAGMA integrity_check").fetchall()
         if result != [("ok",)]:
             detail = "; ".join(str(row[0]) for row in result[:3])
@@ -46,6 +57,10 @@ def inspect_db(path: Path) -> DbInfo:
         if not has_table:
             raise NothingToCopy("la base no tiene tabla de capturas")
         snapshots = conn.execute("SELECT COUNT(*) FROM snapshots").fetchone()[0]
+    except sqlite3.OperationalError as exc:
+        if str(exc) == "interrupted":  # la función de progreso recibió la señal
+            raise KeyboardInterrupt from exc
+        raise VerificationError(f"no se ha podido leer la base: {exc}") from exc
     except sqlite3.Error as exc:
         raise VerificationError(f"no se ha podido leer la base: {exc}") from exc
     finally:

@@ -81,9 +81,11 @@ def run_backup(
         log(f"copia pendiente: {exc}; se reintenta en la próxima comprobación horaria")
         return EXIT_BUSY
     except NothingToCopy as exc:
+        clear_marker(marker)  # otros fallos no se reintentan hasta el día siguiente
         log(f"copia no hecha: nada que copiar ({exc})")
         return EXIT_FAILED
     except BackupFailed as exc:
+        clear_marker(marker)
         log(f"error en la copia: {exc}")
         return EXIT_FAILED
     clear_marker(marker)

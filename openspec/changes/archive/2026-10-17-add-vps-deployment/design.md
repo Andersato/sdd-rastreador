@@ -158,8 +158,12 @@ El servicio `backup` lleva también `TZ: Europe/Madrid`, como `scheduler`, y
   así hace la copia de arranque o el reintento si tocan. Root y grupo root
   lo paran todo, porque los archivos quedarían a nombre de root.
 
-La línea de arranque de `scheduler.py` añade "recogida activada",
-"recogida desactivada" o "COLLECTION_ENABLED no válido".
+La línea de arranque de `scheduler.py` sigue el mismo orden: con usuario
+root, grupo root o intervalo no válido termina en "configuración no válida
+(el motivo, en la línea siguiente)", y si no, en "recogida activada",
+"recogida desactivada (…)" o "COLLECTION_ENABLED no válido (…)". Así, con
+una configuración no válida el log nunca dice "recogida desactivada"
+(escenario «Root sin la variable»; corregido tras el test-writer).
 
 **Nota de pruebas:** Compose recorta los espacios de los valores sin
 comillas de `.env`, así que `COLLECTION_ENABLED= true ` puede llegar ya como

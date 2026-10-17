@@ -1,4 +1,4 @@
-# Spec Delta
+# database-backup Specification
 
 ## Purpose
 
@@ -6,7 +6,7 @@ Proteger el histórico de precios con copias diarias verificadas en la
 máquina que recoge, una segunda copia descargada al Mac que el servidor no
 puede borrar, y un procedimiento de restauración probado.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Copia diaria a hora fija
 Con la recogida activada (`COLLECTION_ENABLED=true`), el programador SHALL
@@ -189,8 +189,8 @@ a mano: si no existe, ambos MUST fallar sin crearla, pero
 estar en `.gitignore` y `.dockerignore`.
 
 #### Scenario: Archivos a nombre del usuario del host (verificación manual)
-- **WHEN** en el VPS el usuario `deploy` (1001:1001) es dueño de `./backups` y se hace una copia
-- **THEN** `./backups/prices-2026-10-17.db.gz` pertenece a 1001:1001
+- **WHEN** en el VPS el usuario `deploy` (el número de `id -u` e `id -g`; 1000:1000 en el VPS de IONOS) es dueño de `./backups` y se hace una copia
+- **THEN** `./backups/prices-2026-10-17.db.gz` pertenece a ese mismo número de usuario y de grupo (1000:1000 en el VPS de IONOS)
 
 #### Scenario: ./backups inexistente
 - **WHEN** existe `./data` pero no `./backups` y se lanza `docker compose up -d`

@@ -166,3 +166,58 @@ def test_supercronic_warning(doc):
 
 def test_homebrew_rsync_in_the_runbook(doc):
     assert "brew install rsync" in doc and "openrsync" in doc
+
+
+def test_unattended_upgrades_check_expected_output_and_how_to_enable(doc):
+    """Escenario: Actualizaciones automáticas: cómo comprobar que está instalado y
+    activo, la salida esperada y cómo activarlo si no lo está."""
+    part = section(doc, "5. Sistema").split("### 5.4", 1)[1]
+    for needed in ("dpkg -l unattended-upgrades", "systemctl is-enabled unattended-upgrades",
+                   "systemctl is-active unattended-upgrades", "enabled", "active",
+                   "apt install -y unattended-upgrades", "dpkg-reconfigure"):
+        assert needed in part, needed
+
+
+def test_timezone_is_checked_with_expected_output(doc):
+    """Escenario: Reinicio automático a las 05:30 (zona horaria comprobada con
+    `timedatectl`, que muestra `Europe/Madrid`)."""
+    part = section(doc, "5. Sistema").split("### 5.3", 1)[1].split("### 5.4", 1)[0]
+    commands = code(part).splitlines()
+    assert commands.index("sudo timedatectl set-timezone Europe/Madrid") < commands.index("timedatectl")
+    assert "Time zone: Europe/Madrid" in part
+    reboot = section(doc, "5. Sistema").split("### 5.4", 1)[1]
+    assert "05:30" in reboot and "04:43" in reboot and re.search(r"minuto\s+17", reboot)
+
+
+def test_disk_space_before_first_start_and_in_updates(doc):
+    """Escenario: Espacio en disco (`df -h` antes del primer arranque y en la
+    actualización)."""
+    start = code(section(doc, "12. Primer arranque"))
+    assert start.index("df -h") < start.index("docker compose up -d")
+    update = code(section(doc, "13. Actualizar").split("### Actualizar el VPS ya desplegado", 1)[0])
+    assert "df -h" in update
+
+
+def test_documented_startup_line_is_the_real_one(doc, monkeypatch):
+    """Escenario: Verificación tras reinicio (el texto exacto que se espera ver): la
+    línea de arranque que copia el runbook es la que escribe `scheduler.py` con
+    `COLLECTION_ENABLED=true` y el intervalo por defecto."""
+    import importlib.util
+    from datetime import datetime, timezone
+
+    container = REPO_ROOT / "container"
+    monkeypatch.syspath_prepend(str(container))
+    spec = importlib.util.spec_from_file_location("container_scheduler_doc", container / "scheduler.py")
+    scheduler = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(scheduler)
+    line = scheduler.startup_line({"COLLECTION_ENABLED": "true"},
+                                  datetime(2026, 10, 17, 8, 15, tzinfo=timezone.utc))
+    expected = line.split(" · ", 1)[1]
+    assert f"… · {expected}\n" in section(doc, "12. Primer arranque")
+
+
+def test_failed_build_keeps_previous_scheduler(doc):
+    """Escenario: Fallo al construir."""
+    part = section(doc, "13. Actualizar")
+    assert re.search(r"sigue en marcha con la\s+imagen anterior", part)
+    assert "git checkout <commit anterior>" in part

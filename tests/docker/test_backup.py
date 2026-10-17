@@ -245,7 +245,7 @@ def test_daily_copy_disabled_creates_nothing(project, http_server):
     project.wait_startup()
     result = project.compose("exec", "-T", "scheduler", "python", "/app/container/backup.py",
                              "--daily", timeout=120)
-    assert result.returncode == 2
+    assert result.returncode == 0  # no es un error: supercronic no lo registra como tal
     assert "copias desactivadas en esta máquina" in result.stdout
     assert dir_state(project.backups) == {}
 

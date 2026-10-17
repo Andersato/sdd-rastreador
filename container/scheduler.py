@@ -21,8 +21,9 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+from entrypoint import refusal
 from settings import collection_state
-from src.ingestion.scheduled import madrid_time
+from src.ingestion.scheduled import InvalidInterval, madrid_time, parse_interval
 
 CRONTAB_PATH = "/tmp/crontab"
 CHECK_COMMAND = "python /app/container/check.py"
@@ -39,11 +40,26 @@ def crontab() -> str:
             f"{minute} {hour} * * * {BACKUP_COMMAND}\n")
 
 
-def startup_line(env: dict[str, str], now: datetime) -> str:
+def startup_state(uid: int, gid: int, env: dict[str, str]) -> str:
+    """Mismo orden que `check.py` (D8): root, grupo root e intervalo antes que la recogida."""
+    try:
+        parse_interval(env.get("CAPTURE_INTERVAL_HOURS"))
+    except InvalidInterval:
+        invalid_interval = True
+    else:
+        invalid_interval = False
+    if refusal(uid, gid, []) is not None or invalid_interval:
+        return "configuración no válida (el motivo, en la línea siguiente)"
+    return collection_state(env)
+
+
+def startup_line(env: dict[str, str], now: datetime, uid=None, gid=None) -> str:
     interval = env.get("CAPTURE_INTERVAL_HOURS")
     configured = repr(interval) if interval else "6 (por defecto)"
+    state = startup_state(os.getuid() if uid is None else uid,
+                          os.getgid() if gid is None else gid, env)
     return (f"{madrid_time(now)} · programador en marcha: comprobación ahora y cada hora en el "
-            f"minuto {CRON_MINUTE}; intervalo configurado: {configured}; {collection_state(env)}")
+            f"minuto {CRON_MINUTE}; intervalo configurado: {configured}; {state}")
 
 
 def stop_all(signum, frame, kill=os.kill) -> None:

@@ -130,6 +130,45 @@ def test_vps_unreachable_leaves_the_mac_untouched(tmp_path, mac):
 
 
 @needs_rsync
+def test_vps_unreachable_leaves_an_existing_mac_folder_untouched(vps, mac, tmp_path):
+    """Escenario: VPS inaccesible, con copias ya descargadas y restos de un corte
+    en `descargando/`: la carpeta del Mac queda exactamente igual."""
+    gz_copy(vps, date(2026, 10, 16), 1, tmp_path)
+    assert run(vps, mac)[0] == 0
+    (mac / "descargando").mkdir()
+    (mac / "descargando" / "prices-2026-10-17.db.gz").write_bytes(b"medio")
+    before = state(mac)
+    code, out = run(tmp_path / "no-existe", mac)
+    assert code == 1 and "no se han podido listar las copias del VPS" in out
+    assert state(mac) == before
+
+
+@needs_rsync
+def test_downloads_go_to_the_downloading_subfolder(vps, mac, tmp_path):
+    """Escenario: Dónde se descarga: rsync escribe en `descargando/`; solo ya
+    verificada pasa a la carpeta principal, y `descargando/` no queda al final."""
+    gz_copy(vps, TODAY, 2, tmp_path)
+    calls = tmp_path / "destinos.txt"
+    wrapper = tmp_path / "rsync-anota"
+    wrapper.write_text(f"""#!/bin/sh
+case "$*" in
+  *--version*|*--list-only*|*--dry-run*) exec {RSYNC} "$@";;
+esac
+for last; do :; done
+echo "$last" >> {calls}
+ls -A "$(dirname "$last")" > {tmp_path}/principal-durante.txt
+exec {RSYNC} "$@"
+""")
+    wrapper.chmod(wrapper.stat().st_mode | stat.S_IEXEC)
+    code, out = run(vps, mac, rsync=str(wrapper))
+    assert code == 0, out
+    assert calls.read_text().splitlines() == [f"{mac / 'descargando'}/"]
+    # Mientras se descargaba, la copia aún no estaba en la carpeta principal.
+    assert "prices-2026-10-17.db.gz" not in (tmp_path / "principal-durante.txt").read_text()
+    assert sorted(os.listdir(mac)) == ["prices-2026-10-17.db.gz"]
+
+
+@needs_rsync
 def test_connection_cut_halfway(vps, mac, tmp_path):
     """Escenario: Conexión cortada a mitad (rsync que falla al descargar y deja su
     temporal); la siguiente ejecución limpia `descargando/`."""
@@ -266,6 +305,7 @@ def test_local_rotation(vps, mac, tmp_path):
     assert len(kept) == 11
     assert kept[:4] == [backup_name(date(2026, 9, d)) for d in (13, 20, 27)] + [
         backup_name(date(2026, 10, 4))]
+    assert kept[4:] == [backup_name(date(2026, 10, d)) for d in range(11, 18)]
 
 
 @needs_rsync
@@ -312,6 +352,16 @@ def test_missing_dedicated_key(tmp_path, mac, monkeypatch):
     assert "no existe la clave dedicada" in lines[0] and "ssh-keygen" in lines[0]
     assert all("--version" in call[0] for call in calls)  # solo la comprobación de versión
     assert not mac.exists()
+
+
+def test_default_key_is_the_dedicated_one_and_default_folder():
+    """Escenario: Sin la clave personal (configuración del script): por defecto,
+    la clave dedicada `~/.ssh/precios-backups` y la carpeta
+    `~/Backups/precios-gasolineras/`."""
+    args = pull._parse_args(["--host", "deploy@<IP_DEL_VPS>"])
+    assert args.key == "~/.ssh/precios-backups"
+    assert args.dest.rstrip("/") == "~/Backups/precios-gasolineras"
+    assert "id_ed25519" not in args.key and "id_rsa" not in args.key
 
 
 def test_ssh_options_use_only_the_dedicated_key(tmp_path):

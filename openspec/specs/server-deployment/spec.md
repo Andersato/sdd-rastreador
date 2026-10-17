@@ -1,4 +1,4 @@
-# Spec Delta
+# server-deployment Specification
 
 ## Purpose
 
@@ -6,7 +6,7 @@ Dejar por escrito, en un runbook del repo, cómo se prepara el VPS, cómo se
 lleva a él el histórico sin perder capturas y cómo se actualiza, para poder
 repetirlo desde cero sin depender de la memoria.
 
-## ADDED Requirements
+## Requirements
 
 ### Requirement: Runbook del VPS en docs/
 `docs/` SHALL contener un runbook del VPS en español, con los comandos
@@ -84,8 +84,8 @@ carpetas `./data` y `./backups` a nombre de `deploy`, y comprobar que la
 variable está en `.env` antes de lanzarlo.
 
 #### Scenario: .env del VPS
-- **WHEN** se sigue el paso de configuración con el usuario `deploy` (1001:1001)
-- **THEN** `.env` contiene `HOST_UID=1001`, `HOST_GID=1001` y `COLLECTION_ENABLED=true`, obtenidos con `id -u` e `id -g`
+- **WHEN** se sigue el paso de configuración con el usuario `deploy` (1000:1000 en el VPS de IONOS)
+- **THEN** `.env` contiene `HOST_UID=1000`, `HOST_GID=1000` (los números de `id -u` e `id -g`) y `COLLECTION_ENABLED=true`
 
 #### Scenario: Variable comprobada antes de arrancar
 - **WHEN** se lee el paso del primer arranque en el VPS

@@ -269,7 +269,9 @@ printf 'HOST_UID=%s\nHOST_GID=%s\n' "$(id -u)" "$(id -g)" > .env
 mkdir data
 ic() { docker compose -p ingest-check "$@"; }
 captures() { python3 -c "import sqlite3; print(sqlite3.connect('data/prices.db').execute('SELECT count(*) FROM snapshots').fetchone()[0])"; }
-# Crea la red del proyecto de prueba (la ayuda no pide nada a la API)
+# ESTE paso crea la red del proyecto de prueba (la ayuda no pide nada a la
+# API). Sin él, el `docker run` siguiente falla con
+# "network ingest-check_default not found".
 ic run --rm ingest --help >/dev/null
 # Servidor de respuestas guardadas, en esa red
 docker run -d --rm --name ingest-check-fixtures --network ingest-check_default \
@@ -359,12 +361,17 @@ Máquina: OrbStack, Ubuntu 26.04.1 LTS, Docker 29.1.3, Compose 2.40.3.
 
 | Fecha | Escenario | Resultado |
 |-------|-----------|-----------|
-| | A | pendiente |
-| | B | pendiente |
-| | C | pendiente |
-| | D | pendiente |
+| 2026-10-17 | A | ✓ Código 0. `Estaciones procesadas: 2 (2 nuevas, 0 actualizadas)`, 3 precios, 0 avisos. `data/` solo con `prices.db`, dueño `1000 1000` (el número de `deploy` en este VPS es 1000, así que el escenario se comprueba con el número de `id -u`; el caso de un número distinto de 1000 queda probado en OrbStack el 2026-10-12 con 1001, decisión del usuario). 1 captura. |
+| 2026-10-17 | B | ✓ Código 0. `2 (0 nuevas, 2 actualizadas)`. Solo `prices.db` (sin `-journal` ni `.tmp-…`), dueño `1000 1000`. 2 capturas. |
+| 2026-10-17 | C | ✓ Código 1. `Error: no se ha podido crear la base de datos /app/data/prices.db: [Errno 13] Permission denied: '/app/data/prices.db.tmp-…'`. `data/` sigue vacía. |
+| 2026-10-17 | D | ✓ Código 1. `Error: no se ha podido guardar en la base de datos /app/data/prices.db: attempt to write a readonly database`. Listado y hash iguales antes y después. |
 
-Máquina: IONOS, Ubuntu 26.04, x86_64.
+Máquina: IONOS, Ubuntu 26.04, x86_64, Docker 29.1.3, Compose 2.40.3. Antes y
+después: `ufw status` activo, solo OpenSSH; el programador real siguió en
+marcha sin reiniciarse (`Up 4 minutes` → `Up 8 minutes`). La carpeta de
+prueba y la red se borraron al terminar. Incidencia: el primer `docker run`
+del servidor de respuestas falló (`network ingest-check_default not found`)
+porque se saltó el `ic run --rm ingest --help` que crea la red.
 
 ### Ejecución real
 

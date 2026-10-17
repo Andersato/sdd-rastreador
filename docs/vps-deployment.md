@@ -258,7 +258,7 @@ No coincide con la copia de las 04:43 ni con las comprobaciones del minuto
 17, y el programador ya ha demostrado que vuelve solo tras un reinicio:
 
 ```sh
-sudo tee /etc/apt/apt.conf.d/52-reinicio-automatico <<'EOF'
+sudo tee /etc/apt/apt.conf.d/52reinicio-automatico <<'EOF'
 Unattended-Upgrade::Automatic-Reboot "true";
 Unattended-Upgrade::Automatic-Reboot-Time "05:30";
 EOF
@@ -566,5 +566,8 @@ ls -ln backups/
 | 2026-10-16 | Reinstalación, usuario, SSH, Docker, migración (8 capturas, `ok`), arranque | ✓ Primera captura en el VPS a las 15:17:04. |
 | 2026-10-16 | Reinicio del VPS | ✓ El programador volvió solo (`Up 3 minutes`). |
 | 2026-10-17 | `PasswordAuthentication` corregido con `00-solo-claves.conf` | ✓ La clave desconocida da `Permission denied (publickey)` sin pedir contraseña. `sshd -T`: `permitrootlogin no`, `passwordauthentication no`, `kbdinteractiveauthentication no`. `passwd -S deploy`: `deploy L 2026-10-16 0 99999 7 -1` (bloqueada). |
-| | Swap, zona horaria, reinicio automático (sección 5) | pendiente |
-| | Actualización a la versión con copias (sección 13) | pendiente |
+| 2026-10-17 | Swap, zona horaria, reinicio automático (sección 5) | ✓ `mkswap`: `size = 2 GiB`. `swapon --show`: `/swapfile file 2G 0B -1`; `free -h`: `Mem` 7.7Gi, `Swap` 2.0Gi. `timedatectl`: `Europe/Madrid (CEST, +0200)`. `20auto-upgrades` con los dos `"1"`; `apt-config dump`: `Automatic-Reboot "true"` y `Automatic-Reboot-Time "05:30"` (archivo `52reinicio-automatico`). |
+| 2026-10-17 | Reinicio del VPS tras la sección 5 | ✓ `swapon --show` igual tras reiniciar. El programador volvió solo (`Up About a minute`); a las 10:38:29, `programador en marcha … recogida activada` y `no toca capturar: última captura hace 1 h 21 min`. No repitió la copia (la de hoy tenía menos de 26 h). |
+| | Primera copia diaria de las 04:43 (2026-10-18): `docker compose logs scheduler \| grep '2026-10-18 04:4'` muestra `copia guardada: prices-2026-10-18.db.gz` | pendiente (posterior al archivo) |
+| | Recuperación tras un reinicio automático de `unattended-upgrades` a las 05:30 | pendiente: se comprueba cuando ocurra (posterior al archivo) |
+| 2026-10-17 | Actualización a la versión con copias (sección 13), commit `ee22b24` | ✓ Copia previa en solo lectura: `ok`, 12 capturas (8 del Mac + 15:17, 21:17, 03:17 y 09:17 del VPS). Arranque a las 10:15:54 con `recogida activada`; la comprobación de arranque hizo la primera copia (regla de 26 h, no había ninguna): `prices-2026-10-17.db.gz (11,5 MB, 12 capturas, integridad correcta)`. Copia a mano a las 10:18:34, igual. `backups/prices-2026-10-17.db.gz` a nombre de `deploy` (1000:1000 en este VPS). |

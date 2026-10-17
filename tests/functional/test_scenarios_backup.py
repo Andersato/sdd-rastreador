@@ -509,3 +509,34 @@ def test_error_line_shows_time_and_reason(dirs):
     assert run_backup(db, backups, clock, out) == EXIT_FAILED
     assert lines[0].startswith("2026-10-17 04:43:00 CEST · error en la copia: ")
     assert str(backups) in lines[0]
+
+
+# --- Errores de disco como línea de log (revisión) ----------------------------
+
+def test_temporary_cleanup_error_is_a_log_line(dirs, monkeypatch):
+    data, backups = dirs
+    db = seed(data)
+
+    def broken(folder):
+        raise PermissionError(13, "Permission denied", str(folder))
+
+    monkeypatch.setattr(make, "_clean_temporaries", broken)
+    lines, out = log_of(None)
+    assert run_backup(db, backups, clock, out) == EXIT_FAILED
+    assert lines[0].startswith("2026-10-17 04:43:00 CEST · error en la copia: no se han podido "
+                               "borrar los temporales")
+
+
+def test_rotation_error_keeps_the_saved_copy_and_says_so(dirs, monkeypatch):
+    data, backups = dirs
+    db = seed(data)
+
+    def broken(folder, today):
+        raise PermissionError(13, "Permission denied", "prices-2026-10-01.db.gz")
+
+    monkeypatch.setattr(make, "rotate", broken)
+    lines, out = log_of(None)
+    assert run_backup(db, backups, clock, out) == EXIT_OK
+    assert "copia guardada: prices-2026-10-17.db.gz" in lines[0]
+    assert "aviso: error en la rotación" in lines[0]
+    assert (backups / "prices-2026-10-17.db.gz").exists()

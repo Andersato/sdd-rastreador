@@ -153,6 +153,20 @@ Archivo `~/Library/LaunchAgents/es.preciosgasolineras.pull-backups.plist`
   ese día se ejecuta dos veces, la segunda no descarga nada («copias nuevas:
   0»).
 
+**Al pegar el archivo en la terminal** (por ejemplo, con `cat > … <<'EOF'`):
+en zsh con oh-my-zsh, la función que protege los caracteres que siguen a una
+URL puede añadir una contrabarra en la línea del `DOCTYPE`
+(`…PropertyList-1.0.dtd"\>`). Antes de cargarlo, comprueba el archivo:
+
+```sh
+plutil -lint ~/Library/LaunchAgents/es.preciosgasolineras.pull-backups.plist   # → OK
+grep -c '\\' ~/Library/LaunchAgents/es.preciosgasolineras.pull-backups.plist   # → 0 (ninguna contrabarra)
+```
+
+`plutil -lint` puede dar OK aunque esté la contrabarra, así que hace falta
+también el `grep`. Si da más de 0, quítala con un editor (o
+`sed -i '' 's/"\\>/">/' …plist`) y vuelve a comprobarlo.
+
 Comandos:
 
 ```sh
@@ -164,6 +178,37 @@ launchctl bootout gui/$(id -u)/es.preciosgasolineras.pull-backups               
 
 `launchctl print` muestra, entre otras cosas, `last exit code` (0 si la
 última ejecución fue bien).
+
+## 6. Comprobar que la clave solo puede leer `backups/`
+
+Comandos escritos enteros a propósito. En zsh (la shell por defecto de
+macOS), un comando guardado en una variable (`K="ssh …"` y luego `$K`) **no
+se separa en palabras** y falla; habría que usar `${=K}`.
+
+**[VPS]** antes y después (con tu clave personal, `ssh vps-gasolineras`); la
+salida debe ser idéntica:
+
+```sh
+ls -la ~/sdd-rastreador/backups
+sha256sum ~/sdd-rastreador/backups/* ~/sdd-rastreador/data/prices.db
+```
+
+**[Mac]**, con la clave dedicada:
+
+```sh
+ssh -i ~/.ssh/precios-backups -o IdentitiesOnly=yes -o BatchMode=yes deploy@<IP_DEL_VPS>; echo "código: $?"
+ssh -i ~/.ssh/precios-backups -o IdentitiesOnly=yes -o BatchMode=yes deploy@<IP_DEL_VPS> ls; echo "código: $?"
+echo prueba > /tmp/subida.txt
+/opt/homebrew/bin/rsync -t -e "ssh -i $HOME/.ssh/precios-backups -o IdentitiesOnly=yes -o BatchMode=yes" /tmp/subida.txt deploy@<IP_DEL_VPS>:./; echo "código: $?"
+mkdir -p /tmp/vacio
+/opt/homebrew/bin/rsync -r --delete -e "ssh -i $HOME/.ssh/precios-backups -o IdentitiesOnly=yes -o BatchMode=yes" /tmp/vacio/ deploy@<IP_DEL_VPS>:./; echo "código: $?"
+/opt/homebrew/bin/rsync -t -e "ssh -i $HOME/.ssh/precios-backups -o IdentitiesOnly=yes -o BatchMode=yes" deploy@<IP_DEL_VPS>:../data/prices.db /tmp/; echo "código: $?"
+ls -l /tmp/prices.db
+rm -rf /tmp/subida.txt /tmp/vacio
+```
+
+Esperado: ninguna de las cinco funciona (ver la tabla de resultados) y
+`/tmp/prices.db` no existe.
 
 ## Resultados
 
@@ -183,14 +228,18 @@ script (aprobado el 2026-10-16).
 
 | Fecha | Prueba | Resultado |
 |-------|--------|-----------|
-| | Descarga con la clave dedicada (`src.backup.pull`) | pendiente |
-| | `ssh … deploy@<IP_DEL_VPS>` y `ssh … ls` con la clave dedicada | pendiente |
-| | Subir un archivo a `backups/` | pendiente |
-| | Borrar una copia con `rsync --delete` | pendiente |
-| | Descargar `data/prices.db` | pendiente |
+| 2026-10-17 | Descarga con la clave dedicada (`src.backup.pull`) | ✓ Código 0: `copias nuevas: 1 (prices-2026-10-17.db.gz)`, `la más reciente del VPS: prices-2026-10-17.db.gz (12 capturas, verificada ahora)`. La segunda ejecución: `copias nuevas: 0`, `(ya estaba en el Mac)`, código 0. `rrsync -ro` acepta `--dry-run --itemize-changes` y los filtros. |
+| 2026-10-17 | `ssh` sin comando con la clave dedicada | ✓ No abre terminal: `PTY allocation request failed on channel 0`, `/usr/bin/rrsync error: Not invoked via sshd`, código 1. |
+| 2026-10-17 | `ssh … ls` con la clave dedicada | ✓ No ejecuta `ls`: `/usr/bin/rrsync error: SSH_ORIGINAL_COMMAND does not run rsync`, código 1. |
+| 2026-10-17 | Subir un archivo a `backups/` | ✓ Rechazado: `/usr/bin/rrsync error: sending to read-only server is not allowed`, código 12. |
+| 2026-10-17 | Borrar con `rsync -r --delete` | ✓ Rechazado: `sending to read-only server is not allowed`, código 12. |
+| 2026-10-17 | Descargar `../data/prices.db` | ✓ Rechazado: `/usr/bin/rrsync error: do not use .. in arg (anchor the path at the root of your restricted dir)`, código 12; `/tmp/prices.db` no existe. |
+| 2026-10-17 | `ls -la` y `sha256sum` de `backups/` y `data/prices.db` en el VPS, antes y después | ✓ Idénticos. |
 
 ### Ejecución programada (tarea 3.5)
 
 | Fecha | Resultado |
 |-------|-----------|
-| | pendiente |
+| 2026-10-17 10:30 | ✓ Carga (`RunAtLoad`): `plutil -lint` OK, `launchctl bootstrap` código 0; `launchctl print`: `runs = 1`, `last exit code = 0`. Log: `copias nuevas: 0`, `la más reciente del VPS: prices-2026-10-17.db.gz (ya estaba en el Mac)`. |
+| 2026-10-17 | ✓ Al pegar el `.plist` en zsh con oh-my-zsh se coló la contrabarra en el `DOCTYPE` (`grep -c '\\'` → 1, aunque `plutil -lint` daba OK). Quitada con `sed`: `grep` → 0, `plutil -lint` OK, recargado con `launchctl bootout` y `bootstrap` (código 0). |
+| 2026-10-18 10:00 | pendiente, **posterior al archivo**: ejecución por `StartCalendarInterval`; el log debe mostrar `copias nuevas: 1 (prices-2026-10-18.db.gz)` (la copia de las 04:43 del VPS). |

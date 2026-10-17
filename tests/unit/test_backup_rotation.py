@@ -40,6 +40,9 @@ def test_weeks_with_gaps(tmp_path):
     make(tmp_path, sparse + days(date(2026, 10, 1), date(2026, 10, 7)))
     removed, _ = rotate(tmp_path, date(2026, 10, 7))
     assert removed == ["prices-2026-08-26.db.gz"]
+    expected = [date(2026, 9, 2), date(2026, 9, 10), date(2026, 9, 16), date(2026, 9, 24),
+                *days(date(2026, 10, 1), date(2026, 10, 7))]
+    assert names(tmp_path) == sorted(backup_name(d) for d in expected)
     assert len(names(tmp_path)) == 11
 
 
@@ -49,7 +52,9 @@ def test_week_without_any_copy_does_not_count(tmp_path):
                     *days(date(2026, 10, 11), date(2026, 10, 17))])
     removed, _ = rotate(tmp_path, date(2026, 10, 17))
     assert removed == []
-    assert len(names(tmp_path)) == 11
+    expected = [date(2026, 9, 6), date(2026, 9, 13), date(2026, 9, 27), date(2026, 10, 4),
+                *days(date(2026, 10, 11), date(2026, 10, 17))]
+    assert names(tmp_path) == sorted(backup_name(d) for d in expected)
 
 
 def test_first_copies(tmp_path):
@@ -83,7 +88,8 @@ def test_foreign_files_are_untouched(tmp_path):
     """Escenario: Archivos ajenos."""
     make(tmp_path, days(date(2026, 10, 6), date(2026, 10, 17)),
          extra=["antes-de-migrar.db", "notas.txt", "prices-2026-10-01.db", "Prices-2026-10-01.db.gz"])
-    rotate(tmp_path, date(2026, 10, 17))
+    removed, _ = rotate(tmp_path, date(2026, 10, 17))
+    assert not any(name in removed for name in ("antes-de-migrar.db", "notas.txt"))
     for name in ["antes-de-migrar.db", "notas.txt", "prices-2026-10-01.db", "Prices-2026-10-01.db.gz"]:
         assert (tmp_path / name).read_bytes() == b"ajeno"
 

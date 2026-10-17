@@ -174,3 +174,18 @@ def test_marker_never_goes_to_data_or_backups(dirs, holder):
     assert folder_state(data) == before
     assert os.listdir(backups) == []
     assert marker.parent.name == "tmp"
+
+
+def test_retry_that_fails_for_another_reason_clears_the_marker(dirs):
+    """Revisión: una copia pendiente por bloqueo cuyo reintento falla por otro
+    motivo (integridad) no se vuelve a intentar ese día."""
+    data, backups, marker = dirs
+    db = seed(data)
+    marker.write_text("2026-10-17")
+    corrupt_index(db)
+    out = []
+    assert retry_pending(db, backups, clock_at("2026-10-17T03:17:00Z"), out.append,
+                         marker) != EXIT_OK
+    assert not marker.exists()
+    assert retry_pending(db, backups, clock_at("2026-10-17T04:17:00Z"), out.append,
+                         marker) is None

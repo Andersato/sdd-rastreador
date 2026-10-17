@@ -116,3 +116,18 @@ def test_image_built_with_local_files_excludes_them(image, context, tags):
     listing = in_image(tag, "ls", "-A", "/app")
     assert listing.returncode == 0, listing.stderr
     assert sorted(listing.stdout.split()) == ["container", "src"]
+
+
+def test_image_built_with_backups_excludes_them(image, context, tags):
+    """Escenario «Copias de seguridad fuera de la imagen»: con
+    `backups/prices-2026-10-17.db.gz` en la carpeta, la imagen construida con el
+    Dockerfile real no contiene ningún archivo de `backups/` ni ninguna copia."""
+    tag = tags()
+    build(context, tag)
+    found = in_image(tag, "find", "/", "-xdev",
+                     "(", "-name", "*.db.gz", "-o", "-path", "*/backups/*", ")", "-print")
+    # Sin root, `find` no entra en carpetas del sistema como /root: solo se
+    # admiten esos avisos; /app sí se recorre entera.
+    assert all("Permission denied" in line for line in found.stderr.splitlines()), found.stderr
+    assert "/app" not in found.stderr
+    assert found.stdout.strip() == ""

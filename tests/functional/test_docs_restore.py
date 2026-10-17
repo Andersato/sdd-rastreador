@@ -49,3 +49,17 @@ def test_result_table(doc):
     """Escenario: Resultado anotado (la tabla; los valores los pone la tarea 3.7)."""
     table = doc.split("## Prueba de la restauración en el Mac", 1)[1]
     assert "| Fecha | Copia usada |" in table and "Capturas restauradas" in table
+
+
+def test_result_is_annotated_with_date_copy_and_count(doc):
+    """Escenario: Resultado anotado: la tabla tiene la prueba hecha en el Mac, con su
+    fecha, la copia usada y el número de capturas obtenido (y `ok`)."""
+    table = doc.split("## Prueba de la restauración en el Mac", 1)[1]
+    rows = [line for line in table.splitlines()
+            if re.match(r"\|\s*\d{4}-\d{2}-\d{2}\s*\|", line)]
+    assert rows, "no hay ninguna prueba anotada en la tabla"
+    cells = [cell.strip() for cell in rows[0].strip("|").split("|")]
+    assert re.search(r"prices-\d{4}-\d{2}-\d{2}\.db\.gz", cells[1])
+    assert re.fullmatch(r"[\d.]+", cells[3]), cells[3]  # capturas restauradas
+    assert cells[3] in cells[2]  # las mismas que indica el log del VPS
+    assert "ok" in cells[4]

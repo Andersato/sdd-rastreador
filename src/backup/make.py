@@ -86,12 +86,20 @@ def make_backup(
             if skip_if_newer_than is not None and final.exists() \
                     and final.stat().st_mtime > skip_if_newer_than:
                 raise AlreadyDone(final.name)
-            cleaned = _clean_temporaries(backups_dir)
+            try:
+                cleaned = _clean_temporaries(backups_dir)
+            except OSError as exc:
+                raise BackupFailed(f"no se han podido borrar los temporales en {backups_dir}: "
+                                   f"{exc}") from exc
             result = _backup_locked(db_path, backups_dir, final, deadline, sleep, monotonic)
             result.cleaned = cleaned
-            result.removed, future = rotate(backups_dir, today)
-            result.warnings += [f"fecha futura en {name} (no cuenta para la rotación)"
-                                for name in future]
+            try:
+                result.removed, future = rotate(backups_dir, today)
+            except OSError as exc:  # la copia ya está publicada: se dice, con el error
+                result.warnings.append(f"error en la rotación: {exc}")
+            else:
+                result.warnings += [f"fecha futura en {name} (no cuenta para la rotación)"
+                                    for name in future]
             return result
     except IngestionBusy as exc:
         raise BackupPending(BUSY) from exc
@@ -119,8 +127,8 @@ def _backup_locked(db_path, backups_dir, final, deadline, sleep, monotonic) -> B
             info = inspect_db(dump)
         except VerificationError as exc:
             raise BackupFailed(f"la base no ha pasado la verificación: {exc}") from exc
-        digest = sha256_of(dump)
         try:
+            digest = sha256_of(dump)
             _compress(dump, packed)
             if gzip_digest(packed) != digest:
                 raise BackupFailed("lo comprimido no coincide con la base volcada")

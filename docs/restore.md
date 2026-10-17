@@ -16,11 +16,10 @@ Con la copia más reciente de la carpeta del Mac
 ```sh
 COPIA=$(ls ~/Backups/precios-gasolineras/prices-*.db.gz | sort | tail -1)
 echo "$COPIA"
-DESTINO=~/restauracion-$(date +%F-%H%M)          # carpeta nueva
-mkdir "$DESTINO"                                 # falla si ya existe: no se pisa nada
+DESTINO=/tmp/restauracion-$(date +%F-%H%M)       # carpeta nueva
+mkdir "$DESTINO"                                 # sin -p: falla si ya existe, así no se pisa ningún prices.db
 gunzip -c "$COPIA" > "$DESTINO/prices.db"
-sqlite3 -readonly "$DESTINO/prices.db" "PRAGMA integrity_check;"
-sqlite3 -readonly "$DESTINO/prices.db" "SELECT COUNT(*) FROM snapshots;"
+sqlite3 -readonly "$DESTINO/prices.db" "PRAGMA integrity_check; SELECT COUNT(*) FROM snapshots;"
 ```
 
 Esperado:
@@ -36,8 +35,8 @@ Esperado:
   no lo usa en ningún paso).
 
 Para usar la base restaurada sin tocar nada más, se abre en solo lectura
-(`sqlite3 -readonly …`). Cuando ya no haga falta, se puede borrar la carpeta
-`$DESTINO`, que es solo una copia.
+(`sqlite3 -readonly …`). Cuando ya no haga falta, se borra la carpeta
+`$DESTINO` (`rm -r "$DESTINO"`), que es solo una copia.
 
 ## 2. En un VPS (nuevo o tras perder la base)
 
@@ -76,4 +75,8 @@ docker compose logs --tail 20 scheduler               #    "recogida activada"
 
 | Fecha | Copia usada | Capturas (log del VPS) | Capturas restauradas | `integrity_check` | `data/prices.db` del Mac |
 |-------|-------------|------------------------|----------------------|-------------------|--------------------------|
-| pendiente | | | | | |
+| 2026-10-17 | `prices-2026-10-17.db.gz` (la más reciente del Mac, descargada con `src.backup.pull`) | 12 (`copia guardada: prices-2026-10-17.db.gz (11,5 MB, 12 capturas, integridad correcta)`) | 12 | `ok` | No se usa en ningún paso del procedimiento |
+
+Se restauró en `/tmp/restauracion` (carpeta temporal, borrada después). El
+procedimiento usa una carpeta con la fecha y `mkdir` sin `-p` para que nunca
+se reutilice una carpeta con un `prices.db` dentro.

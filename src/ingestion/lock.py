@@ -59,6 +59,14 @@ def data_dir_lock(folder: Path, wait_s: float = 0, *, deadline: float | None = N
         os.close(fd)
 
 
+_sigterm_received = False
+
+
+def sigterm_received() -> bool:
+    """Si este proceso ha recibido SIGTERM dentro de `sigterm_as_interrupt`."""
+    return _sigterm_received
+
+
 @contextmanager
 def sigterm_as_interrupt() -> Iterator[None]:
     """Trata SIGTERM (`docker stop`, parada del programador) igual que Ctrl+C.
@@ -70,6 +78,8 @@ def sigterm_as_interrupt() -> Iterator[None]:
     """
 
     def interrupt(signum, frame):
+        global _sigterm_received
+        _sigterm_received = True  # el programador no debe seguir con más trabajo
         raise KeyboardInterrupt
 
     previous = signal.signal(signal.SIGTERM, interrupt)

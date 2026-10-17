@@ -84,3 +84,17 @@ def test_unknown_version_is_reported_not_rejected(db):
     conn.close()
     info = inspect_db(db)
     assert (info.version, info.snapshots) == (7, 1)
+
+
+def test_integrity_check_can_be_interrupted(db, monkeypatch):
+    """Revisión: SIGTERM durante `integrity_check` (llega como KeyboardInterrupt en
+    la función de progreso) interrumpe la verificación en vez de esperar."""
+    import src.backup.verify as verify
+
+    def interrupted():
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(verify, "_progress", interrupted)
+    monkeypatch.setattr(verify, "PROGRESS_STEPS", 1)
+    with pytest.raises(KeyboardInterrupt):
+        inspect_db(db)

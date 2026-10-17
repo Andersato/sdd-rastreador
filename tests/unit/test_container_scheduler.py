@@ -163,7 +163,7 @@ def test_supercronic_killed_by_signal_returns_128_plus_signal(scheduler, sig, ex
 
 def test_startup_line_shows_configured_interval(scheduler):
     assert "intervalo configurado: 'seis'" in scheduler.startup_line(
-        {"CAPTURE_INTERVAL_HOURS": "seis"}, NOW)
+        {"CAPTURE_INTERVAL_HOURS": "seis"}, NOW, uid=501, gid=20)
 
 
 def test_stop_signal_is_sent_to_every_process(scheduler):
@@ -304,7 +304,20 @@ def test_group_root_comes_before_interval(check, capsys):
 ])
 def test_startup_line_shows_collection_state(scheduler, env, text):
     """Escenarios: Habilitada; Formas admitidas; Sin la variable; Valor no válido."""
-    assert scheduler.startup_line(env, NOW).endswith(text)
+    assert scheduler.startup_line(env, NOW, uid=501, gid=20).endswith(text)
+
+
+@pytest.mark.parametrize(("uid", "gid", "env"), [
+    (0, 20, {}), (501, 0, {}), (501, 20, {"CAPTURE_INTERVAL_HOURS": "seis", "COLLECTION_ENABLED": "false"}),
+    (0, 20, {"COLLECTION_ENABLED": "yes"}),
+], ids=["root-sin-variable", "grupo-root", "intervalo-no-valido", "root-valor-no-valido"])
+def test_startup_line_puts_invalid_configuration_before_collection_state(scheduler, uid, gid, env):
+    """Escenarios: Root sin la variable, Intervalo no válido con la recogida
+    desactivada y Valor no válido de la variable con root: la línea de arranque
+    no dice «recogida desactivada» ni habla de COLLECTION_ENABLED."""
+    line = scheduler.startup_line(env, NOW, uid=uid, gid=gid)
+    assert line.endswith("; configuración no válida (el motivo, en la línea siguiente)")
+    assert "recogida desactivada" not in line and "COLLECTION_ENABLED" not in line
 
 
 # --- check.py: copia de arranque y reintento después de la captura (D6, D8) ----
@@ -434,7 +447,10 @@ def test_backup_refused_without_creating_anything(backup, capsys, uid, gid, env,
     distinto de 0, sin llamar a la copia (nada se crea en ./backups)."""
     for mode in ("--daily", "--manual"):
         code, calls = backup_main(backup, mode, uid=uid, gid=gid, env=env)
-        assert code == 2 and calls == []
+        disabled = text.startswith("copias desactivadas")
+        # La diaria con las copias desactivadas no es un error (supercronic lo
+        # registraría cada día); la manual sí termina con código distinto de 0.
+        assert code == (0 if disabled and mode == "--daily" else 2) and calls == []
         assert text in capsys.readouterr().out
 
 
@@ -470,3 +486,19 @@ def test_copy_name_uses_madrid_date_on_dst_days(instant, name):
     from src.backup.rotation import backup_name
 
     assert backup_name(madrid_date(datetime.fromisoformat(instant))) == name
+
+
+def test_stop_during_ingestion_does_not_start_a_copy(check, monkeypatch):
+    """Revisión: una parada (SIGTERM) durante la ingesta no lanza la copia de
+    arranque ni el reintento después."""
+    import src.ingestion.lock as lock
+
+    rec = Recorder(due=True)
+
+    def interrupted_run(args):
+        monkeypatch.setattr(lock, "_sigterm_received", True)  # como si llegara SIGTERM
+        return 1
+
+    check.main(501, 20, ENABLED, run=interrupted_run, now=NOW, startup=True,
+               after=rec.after(check))
+    assert rec.events == []
