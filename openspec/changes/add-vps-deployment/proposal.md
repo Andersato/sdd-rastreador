@@ -136,9 +136,18 @@ histórico.
 20. **Un solo cambio**: el VPS necesita la variable y las copias a la vez.
     `tasks.md` se agrupará en tres bloques: variable + runbook, copias en
     el VPS, y descarga al Mac + restauración.
-21. **`rsync` del Mac**: desde macOS 15 es `openrsync`. Se comprobará que
-    funciona con `rrsync`; si no, se consultará antes de usar el de
-    Homebrew (dependencia nueva).
+21. **`rsync` del Mac**: el de macOS (`openrsync`) no funciona con `rrsync`
+    (comprobado el 2026-10-16). Dependencia nueva aprobada: `rsync` de
+    Homebrew, solo en el Mac y solo para el script de descarga, que lo usa
+    de forma explícita (nunca `/usr/bin/rsync`) y falla con un mensaje
+    claro si no está instalado. Se documenta en el README y en el runbook.
+21b. **SSH en el VPS**: el `50-cloud-init.conf` de la imagen tenía
+    `PasswordAuthentication yes` y anulaba el `99-solo-claves.conf` (en
+    `sshd` gana el primer valor leído). Se resolvió con
+    `/etc/ssh/sshd_config.d/00-solo-claves.conf` (`PasswordAuthentication
+    no`, `KbdInteractiveAuthentication no`, `PermitRootLogin no`) y la
+    contraseña de `deploy` bloqueada con `passwd -l`. La verificación del
+    runbook usa `sshd -T` (valores efectivos).
 22. **Runbook**: refleja lo que se hizo de verdad; las tareas pedirán al
     usuario su historial de comandos o sus salidas.
 
@@ -188,8 +197,9 @@ histórico.
 - `src/ingestion/` (o módulo hermano sin dependencias de API web ni UI):
   copia con la API de backup de SQLite bajo el bloqueo de la carpeta,
   verificación, compresión y rotación.
-- Script nuevo para el Mac (Python de la biblioteca estándar + `rsync` del
-  sistema): sin dependencias nuevas.
+- Script nuevo para el Mac (Python de la biblioteca estándar + `rsync` de
+  Homebrew, dependencia nueva aprobada solo para el Mac y solo para este
+  script).
 - `.gitignore` y `.dockerignore`: `backups/`.
 - `docs/`: runbook del VPS, copia fuera del VPS con `launchd` y `rrsync`,
   restauración, y comprobaciones de Linux en el VPS en

@@ -9,7 +9,7 @@ from tests.http_server import FIXTURES, HANG, SLOW
 from tests.storage_helpers import query
 
 EXIT_BUSY = 3
-BUSY_MESSAGE = "ya hay otra ingesta en curso"
+BUSY_MESSAGE = "ya hay otra ingesta o copia en curso"
 
 
 def wait_for_request(server, path, timeout=10):

@@ -149,7 +149,7 @@ def run_check(
         log("ingesta interrumpida")
         return 1
     except IngestionBusy:
-        log("otra ingesta en curso; no se captura")
+        log("otra ingesta o copia en curso; no se captura")
         return 0
     except ShortResponseError as exc:
         log(

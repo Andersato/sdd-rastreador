@@ -103,6 +103,7 @@ def test_scheduled_ingestions_use_the_fixed_database(project, http_server):
     http_server.add_fixture("/api", "valid_two_stations.json")
     project.start_scheduler(container_url(http_server, "/api"))
     wait_logs(project, "captura guardada")
+    project.wait_startup()
     result = project.compose("exec", "-T", "-e", "CAPTURE_INTERVAL_HOURS=1", "scheduler",
                              "python", "/app/container/check.py", timeout=120)
     assert "no toca capturar" in result.stdout, result.stdout + result.stderr
@@ -206,7 +207,7 @@ def test_manual_capture_while_scheduler_captures(project, http_server):
     http_server.add_fixture("/manual", "valid_two_stations.json")
     result = project.run_ingest(url=container_url(http_server, "/manual"))
     assert result.returncode == EXIT_BUSY, result.stderr
-    assert "ya hay otra ingesta en curso" in result.stderr
+    assert "ya hay otra ingesta o copia en curso" in result.stderr
     assert http_server.count("/manual") == 0
     wait_logs(project, "captura guardada", timeout=60)
     assert snapshots(project) == 1
@@ -218,8 +219,8 @@ def test_startup_check_still_running_at_minute_17(project, http_server):
     slow_fixture(http_server, "/sched", 8)
     project.start_scheduler(container_url(http_server, "/sched"))
     assert wait_until(lambda: http_server.count("/sched") == 1, timeout=60)
-    result = project.exec_check()  # la comprobación de las :17
-    assert "otra ingesta en curso; no se captura" in result.stdout
+    result = project.exec_check(wait_startup=False)  # la comprobación de las :17
+    assert "otra ingesta o copia en curso; no se captura" in result.stdout
     wait_logs(project, "captura guardada", timeout=60)
     assert http_server.requests == {"/sched": 1}
     assert snapshots(project) == 1
@@ -250,6 +251,7 @@ def test_stop_does_not_wait_for_ingestion(project, http_server, launcher):
     project.start_scheduler(container_url(http_server, "/api"))
     if launcher == "horaria":
         wait_logs(project, "no toca capturar")
+        project.wait_startup()
         project.compose("exec", "-d", "-T", "-e", "CAPTURE_INTERVAL_HOURS=1", "scheduler",
                         "python", "/app/container/check.py", timeout=60)
     assert wait_until(lambda: http_server.count("/api") == 1, timeout=60)
@@ -331,13 +333,14 @@ def test_supercronic_pinned_version_and_valid_crontab(image):
 
 
 def test_compose_build_single_image_for_both_services(project):
-    """Escenario: Construcción (una sola imagen para los dos servicios)."""
+    """Escenarios: Construcción (una sola imagen para los servicios) y Copia a mano
+    con la misma imagen."""
     default = project.compose("config", "--services", timeout=60).stdout.split()
     assert default == ["scheduler"]
     config = json.loads(project.compose("--profile", "manual", "config", "--format", "json",
                                         timeout=60).stdout)
     images = {name: svc["image"] for name, svc in config["services"].items()}
-    assert images == {"ingest": TEST_IMAGE, "scheduler": TEST_IMAGE}
+    assert images == {"ingest": TEST_IMAGE, "scheduler": TEST_IMAGE, "backup": TEST_IMAGE}
     assert project.run_entrypoint("python", "-c", "print('ok')").stdout.strip() == "ok"
 
 

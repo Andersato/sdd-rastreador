@@ -13,10 +13,13 @@ Quedan tres cosas que se comprueban a mano:
    carpetas compartidas por número de usuario, así que los escenarios del
    requisito «Escritura en ./data en un host Linux» solo se pueden ver en un
    Linux de verdad. Se comprobó el 2026-10-12 en una máquina Linux de
-   OrbStack (sección 1, registro histórico). Las siguientes comprobaciones en
-   Linux se harán en el VPS (`add-vps-deployment`).
+   OrbStack (sección 1, registro histórico) y se repite en el VPS
+   (sección 4, `add-vps-deployment`).
 2. **Conexión real por HTTPS.** Una única ejecución contra la API del
    Ministerio, para ver que desde la imagen se conecta bien (certificados).
+   **Desde el VPS ya está verificada**: la captura automática de las 15:17
+   del 2026-10-16 se hizo por HTTPS contra la API real. No hace falta
+   repetirla.
 3. **Programador en el Mac** (`add-scheduled-collection`): lo que depende
    del paso real del tiempo, de reiniciar Colima o de suspender el Mac.
 
@@ -222,6 +225,123 @@ docker compose logs scheduler | grep '2027-03-28 0[0-5]:'
 
 Si los logs de esos días ya se han rotado, se da por no comprobado y se anota.
 
+Lo mismo con la **copia diaria** en el VPS (`add-vps-deployment`): esos dos
+días debe haber exactamente una línea `copia guardada` a las 04:43.
+
+```sh
+docker compose logs scheduler | grep '2026-10-25 04:4' | grep 'copia'
+docker compose logs scheduler | grep '2027-03-28 04:4' | grep 'copia'
+```
+
+## 4. Comprobaciones de Linux en el VPS (`add-vps-deployment`)
+
+Los cuatro escenarios de «Escritura en ./data en un host Linux» de
+`ingestion-container`, repetidos en el VPS con el usuario `deploy`. Las
+lanza el usuario por SSH; ningún agente se conecta al servidor.
+
+**Reglas para no tocar lo real:**
+
+- Todo pasa en una **copia temporal** del proyecto, `~/ingest-check-<fecha>`,
+  que se borra al terminar. `~/sdd-rastreador/data` y
+  `~/sdd-rastreador/backups` no se tocan.
+- **Otro nombre de proyecto de Compose** (`-p ingest-check`): los
+  contenedores del programador real no se ven afectados.
+- **Ni `build` ni `up`**: solo `docker compose run --rm ingest --url …`. La
+  imagen tiene un nombre fijo (`precios-gasolineras-ingest`); reconstruirla
+  desde la copia sustituiría la del programador real. Se usa la que ya hay,
+  que es la del mismo commit (la copia sale de `git archive HEAD`).
+- **Nada de la API real**: las respuestas de `tests/fixtures/` las sirve un
+  contenedor en la red de Docker del proyecto de prueba. No se añade ninguna
+  regla a `ufw` ni se abre ningún puerto al exterior.
+
+### Preparar
+
+En el VPS, como `deploy`:
+
+```sh
+FECHA=$(date +%F)
+PRUEBA=~/ingest-check-$FECHA
+sudo ufw status                                  # antes: solo OpenSSH
+docker compose -f ~/sdd-rastreador/docker-compose.yml -p sdd-rastreador ps   # programador real en marcha
+mkdir "$PRUEBA" && git -C ~/sdd-rastreador archive HEAD | tar -x -C "$PRUEBA"
+cd "$PRUEBA"
+printf 'HOST_UID=%s\nHOST_GID=%s\n' "$(id -u)" "$(id -g)" > .env
+mkdir data
+ic() { docker compose -p ingest-check "$@"; }
+captures() { python3 -c "import sqlite3; print(sqlite3.connect('data/prices.db').execute('SELECT count(*) FROM snapshots').fetchone()[0])"; }
+# Crea la red del proyecto de prueba (la ayuda no pide nada a la API)
+ic run --rm ingest --help >/dev/null
+# Servidor de respuestas guardadas, en esa red
+docker run -d --rm --name ingest-check-fixtures --network ingest-check_default \
+    -v "$PRUEBA/tests/fixtures:/srv:ro" --entrypoint python precios-gasolineras-ingest \
+    -m http.server 8000 --directory /srv
+URL=http://ingest-check-fixtures:8000/valid_two_stations.json
+```
+
+### Escenarios
+
+**A. «Usuario del host con número distinto de 1000»**
+
+```sh
+ic run --rm ingest --url "$URL"; echo "código: $?"
+ls -ln data/
+captures
+```
+
+Esperado: código 0. `data/` solo contiene `prices.db`, con dueño
+`1001 1001` (o el número de `deploy`, `id -u`). Hay 1 captura.
+
+**B. «Base existente en Linux»** (sigue después de A)
+
+```sh
+ic run --rm ingest --url "$URL"; echo "código: $?"
+ls -ln data/
+captures
+```
+
+Esperado: código 0. `data/` sigue conteniendo solo `prices.db` (ni
+`-journal` ni `.tmp-…`), con el mismo dueño. Hay 2 capturas.
+
+**C. «Carpeta sin permiso de escritura»**
+
+```sh
+mv data data-ok
+sudo mkdir data && sudo chmod 755 data        # data/ vacía, de root
+ic run --rm ingest --url "$URL"; echo "código: $?"
+ls -la data/
+sudo rmdir data && mv data-ok data            # volver al estado de B
+```
+
+Esperado: código distinto de 0. Mensaje
+`Error: no se ha podido crear la base de datos /app/data/prices.db: …`.
+`data/` sigue vacía.
+
+**D. «Base de datos a nombre de otro usuario»**
+
+```sh
+sudo chown root:root data/prices.db && sudo chmod 644 data/prices.db
+ls -ln data/; sha256sum data/prices.db
+ic run --rm ingest --url "$URL"; echo "código: $?"
+ls -ln data/; sha256sum data/prices.db
+```
+
+Esperado: código distinto de 0. Mensaje
+`Error: no se ha podido guardar en la base de datos /app/data/prices.db: …`.
+El listado y el hash de `prices.db` son iguales antes y después.
+
+### Terminar
+
+```sh
+docker stop ingest-check-fixtures
+ic down                                           # borra la red del proyecto de prueba
+cd ~ && sudo rm -rf "$PRUEBA"
+sudo ufw status                                   # después: solo OpenSSH
+docker compose -f ~/sdd-rastreador/docker-compose.yml -p sdd-rastreador ps   # sigue en marcha, sin reinicios
+```
+
+Esperado: `ufw status` igual que antes, y el programador real sigue en
+marcha (`Up …` con el mismo tiempo que antes, sin reiniciarse).
+
 ## Resultados
 
 ### Lista de Linux
@@ -235,11 +355,23 @@ Si los logs de esos días ya se han rotado, se da por no comprobado y se anota.
 
 Máquina: OrbStack, Ubuntu 26.04.1 LTS, Docker 29.1.3, Compose 2.40.3.
 
+### Lista de Linux en el VPS
+
+| Fecha | Escenario | Resultado |
+|-------|-----------|-----------|
+| | A | pendiente |
+| | B | pendiente |
+| | C | pendiente |
+| | D | pendiente |
+
+Máquina: IONOS, Ubuntu 26.04, x86_64.
+
 ### Ejecución real
 
 | Fecha | Código | Resumen |
 |-------|--------|---------|
 | 2026-10-12 11:37 (Madrid) | 0 (deducido, pendiente de confirmar) | `Captura guardada en /app/data/prices.db`, 11 514 estaciones (2 nuevas, 11 512 actualizadas), 43 079 precios, 0 avisos. La copia pasó de 1 a 2 capturas. |
+| 2026-10-16 15:17 (Madrid) | — (programador) | Primera captura automática del programador en el VPS, por HTTPS contra la API real: verifica la conexión desde el VPS. |
 | 2026-10-12 12:59 (Madrid) | 0 | Primera captura real con Docker sobre `data/prices.db`, lanzada por el usuario después de `fix-api-tls-ciphers`: 11 514 estaciones (2 nuevas, 11 512 actualizadas), 43 074 precios, 0 avisos. La base pasó de 1 a 2 capturas. |
 
 Notas de la ejecución de las 11:37:

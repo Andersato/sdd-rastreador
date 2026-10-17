@@ -112,9 +112,11 @@ def test_make_project_never_touches_repo_env(tmp_path, monkeypatch):
     (tmp_path / "repo").mkdir()
     (tmp_path / "repo" / "docker-compose.yml").write_text(f"image: {helpers.IMAGE}\n")
     project = helpers.make_project(tmp_path / "tmp", uid=1001, gid=1001)
-    assert (project.root / ".env").read_text() == "HOST_UID=1001\nHOST_GID=1001\n"
+    assert (project.root / ".env").read_text() == (
+        "HOST_UID=1001\nHOST_GID=1001\nCOLLECTION_ENABLED=true\n")
     assert not (tmp_path / "repo" / ".env").exists()
     assert project.data.is_dir()
+    assert project.backups.is_dir()
 
 
 # --- Barrera: los tests no tocan el proyecto real -----------------------------
@@ -128,6 +130,7 @@ def test_make_project_never_touches_repo_env(tmp_path, monkeypatch):
     ("build", "-t", helpers.IMAGE, "."),
     ("rmi", f"{helpers.IMAGE}:latest"),
     ("run", "-v", f"{helpers.REAL_DATA}:/app/data", helpers.TEST_IMAGE),
+    ("run", "-v", f"{helpers.REAL_BACKUPS}:/app/backups", helpers.TEST_IMAGE),
 ])
 def test_guard_rejects_real_project(args, no_subprocess):
     with pytest.raises(ValueError):
@@ -152,3 +155,22 @@ def test_real_data_is_rejected_by_cli_helpers():
                  lambda: ingest(db, {})):
         with pytest.raises(ValueError, match="data/ real"):
             call()
+
+
+def test_run_backup_goes_through_the_guard(tmp_path, monkeypatch):
+    """2.7: `run_backup` usa un proyecto `pgtest-…` y pasa por la barrera."""
+    seen = []
+    monkeypatch.setattr(helpers, "guard_docker_args", lambda args: seen.append(list(args)))
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, "", ""))
+    project = Project(root=tmp_path, name="pgtest-abcd")
+    project.run_backup(env={"COLLECTION_ENABLED": " TRUE "})
+    args = seen[0]
+    assert args[:3] == ["compose", "-p", "pgtest-abcd"]
+    assert args[-1] == "backup"
+    assert "COLLECTION_ENABLED= TRUE " in args
+
+
+def test_run_backup_rejects_real_project(tmp_path, no_subprocess):
+    project = Project(root=tmp_path, name="sdd-rastreador")
+    with pytest.raises(ValueError):
+        project.run_backup()

@@ -40,7 +40,7 @@ Ubuntu; y clave de despliegue de GitHub de solo lectura.
 
 #### Scenario: Acceso solo por clave
 - **WHEN** se lee el paso de SSH
-- **THEN** incluye `PasswordAuthentication no` y `PermitRootLogin no`, comprobar con `sshd -t` antes de recargar, y abrir una segunda sesión SSH antes de cerrar la primera para no quedarse fuera
+- **THEN** incluye `/etc/ssh/sshd_config.d/00-solo-claves.conf` con `PasswordAuthentication no`, `KbdInteractiveAuthentication no` y `PermitRootLogin no` (con el nombre `00-` para que se lea antes que `50-cloud-init.conf`, que trae `PasswordAuthentication yes`: en `sshd` gana el primer valor leído), comprobar la sintaxis con `sshd -t` antes de recargar, verificar los valores efectivos con `sshd -T`, bloquear la contraseña de `deploy` con `passwd -l`, y abrir una segunda sesión SSH antes de cerrar la primera para no quedarse fuera
 
 #### Scenario: Cortafuegos
 - **WHEN** se lee el paso de `ufw`

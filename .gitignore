@@ -1,5 +1,8 @@
 # Base de datos local (histórico): nunca se sube al repo
 data/
+
+# Copias de seguridad de la base: tampoco
+backups/
 *.db
 *.db.tmp-*
 *.db-journal

@@ -39,7 +39,7 @@ Código de salida:
 |---|---|
 | 0 | Captura guardada (aunque haya avisos). |
 | 1 | Ha fallado (API caída, respuesta inválida, error al guardar…). |
-| 3 | Ya hay otra ingesta en curso sobre la misma carpeta de datos. |
+| 3 | Ya hay otra ingesta o copia de seguridad en curso sobre la misma carpeta de datos. |
 | 4 | Respuesta sospechosamente corta (ver abajo). |
 | 130 | Interrumpida con Ctrl+C o `docker stop`. |
 
@@ -162,11 +162,38 @@ El programador es un servicio que se queda en marcha y captura los precios
 solo, cada 6 horas, aunque el ordenador se reinicie o se suspenda. Usa la
 misma imagen y la misma `data/prices.db` que `docker compose run --rm ingest`.
 
-### Activarlo
+### Una sola máquina recoge
 
-Con `.env` y `data/` preparados y la imagen construida (ver arriba):
+Solo la máquina que tiene `COLLECTION_ENABLED=true` en su `.env` captura y
+hace copias de seguridad. Hoy es **el VPS**. En cualquier otra (el Mac), sin
+esa variable el programador arranca, dice en los logs que la recogida está
+desactivada y **no hace nada**: así un `docker compose up -d` por costumbre
+no parte el histórico en dos bases.
+
+Por la misma razón, **no lances `docker compose run --rm ingest` contra la
+API real en otra máquina**: esa captura iría a otra base distinta de la del
+VPS. (Con `--url` hacia un servidor local, para pruebas, no hay problema.)
+
+En `.env` de la máquina que recoge:
 
 ```sh
+COLLECTION_ENABLED=true
+```
+
+Solo `true` la activa (sin distinguir mayúsculas). Vacía, ausente o `false`:
+desactivada. Otro valor (`yes`, `1`…): configuración no válida, también
+desactivada. Tras cambiarla, vuelve a lanzar `docker compose up -d`.
+
+Cómo se preparó el VPS, cómo se migró el histórico y cómo se actualiza:
+`docs/vps-deployment.md`.
+
+### Activarlo
+
+Con `.env`, `data/` y `backups/` preparados y la imagen construida (ver
+arriba):
+
+```sh
+mkdir -p backups        # carpeta de las copias de seguridad; sin ella, up -d falla
 docker compose up -d
 ```
 
@@ -244,8 +271,9 @@ Si estaba capturando, la captura se interrumpe sin dejar nada a medias.
 ### Ingesta manual con el programador activo
 
 `docker compose run --rm ingest` sigue funcionando igual. Si en ese momento
-el programador está capturando, la manual termina enseguida con código 3
-("ya hay otra ingesta en curso") sin llamar a la API. **No uses la ingesta
+el programador está capturando (o haciendo una copia de seguridad), la manual
+termina enseguida con código 3 ("ya hay otra ingesta o copia en curso") sin
+llamar a la API. **No uses la ingesta
 con `.venv` mientras el programador está activo**: el bloqueo no funciona
 entre el Mac y Docker y podrían coincidir dos capturas.
 
@@ -254,6 +282,70 @@ entre el Mac y Docker y podrían coincidir dos capturas.
 `INGEST_API_URL` (en `.env`) hace que el programador pida los precios a otra
 URL en lugar de a la API del Ministerio. Es una herramienta de pruebas (los
 tests la usan con un servidor local): no la pongas en el uso normal.
+
+## Copias de seguridad
+
+La máquina que recoge (la de `COLLECTION_ENABLED=true`, hoy el VPS) hace
+también las copias de seguridad de `data/prices.db`. Van a la carpeta
+`backups/`, fuera de `data/`, que tiene que existir antes de
+`docker compose up -d` (`mkdir -p backups`). `backups/` no se sube al repo.
+
+### Cuándo se hacen
+
+- **Cada día a las 04:43** (hora de Madrid), la hace el programador.
+- **Al arrancar el programador**, si no hay ninguna copia o la última tiene
+  más de 26 horas (por ejemplo, tras tener el servidor apagado).
+- Si a esa hora hay una captura en curso, espera como mucho 10 minutos; si
+  no puede, la copia del día queda pendiente y se reintenta en cada
+  comprobación horaria de ese día.
+- **A mano**, cuando quieras (por ejemplo, antes de actualizar), también con
+  el programador parado:
+
+```sh
+docker compose run --rm backup
+```
+
+Nunca se copia el archivo tal cual: se usa la copia segura de SQLite, se
+comprueba con `PRAGMA integrity_check` y se comprime. La base de `data/` no
+se modifica.
+
+### Qué copias se guardan
+
+Cada copia se llama `prices-AAAA-MM-DD.db.gz` (una por día; una segunda copia
+el mismo día sustituye a la primera). Se conservan las **7 más recientes** y,
+además, **4 semanales** (la última de cada una de las 4 semanas anteriores
+con copia). Lo demás que haya en `backups/` con otro nombre no se toca.
+
+### Cómo leer su línea en el log
+
+En `docker compose logs scheduler` (o en la salida de la copia a mano):
+
+```
+2026-10-17 04:43:05 CEST · copia guardada: prices-2026-10-17.db.gz (912,4 MB, 1.204 capturas, integridad correcta); borradas: prices-2026-10-09.db.gz
+2026-10-17 04:53:00 CEST · copia pendiente: otra ingesta o copia en curso; se reintenta en la próxima comprobación horaria
+2026-10-17 04:43:00 CEST · copias desactivadas en esta máquina; se activan con COLLECTION_ENABLED=true en .env
+```
+
+Otras posibles: `copia no hecha: nada que copiar …` (no hay capturas),
+`error en la copia: …` (con el motivo) y avisos al final de la línea
+(`aviso: versión de estructura desconocida …`).
+
+### Segunda copia en el Mac
+
+El Mac se descarga las copias del VPS una vez al día y las verifica (el VPS
+no puede borrar las del Mac):
+
+```sh
+.venv/bin/python -m src.backup.pull --host deploy@<IP_DEL_VPS>
+```
+
+Necesita **el `rsync` de Homebrew** (`brew install rsync`): es una
+dependencia solo del Mac y solo de este script. El `rsync` de macOS
+(`/usr/bin/rsync`) no funciona con el VPS, así que el script nunca lo usa y,
+si no encuentra el de Homebrew, termina diciendo cómo instalarlo. La clave
+SSH dedicada, la restricción en el VPS y cómo programarlo con `launchd`
+están en `docs/offsite-backups.md`. Para restaurar una copia,
+`docs/restore.md`.
 
 ## Protección del proyecto real frente a los agentes de Claude Code
 

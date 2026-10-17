@@ -7,11 +7,13 @@ destinos que no pueden llegar a la API real), porque el bloqueo de red de
 `tests/conftest.py` no alcanza al contenedor.
 """
 
+import json
 import os
 import secrets
 import shutil
 import sqlite3
 import subprocess
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
@@ -24,9 +26,11 @@ TEST_IMAGE = "precios-gasolineras-ingest-test"
 REAL_PROJECT = REPO_ROOT.name.lower()
 REAL_COMPOSE_FILE = str(REPO_ROOT / "docker-compose.yml")
 REAL_DATA = (REPO_ROOT / "data").resolve()
+REAL_BACKUPS = (REPO_ROOT / "backups").resolve()
 TEST_PREFIX = "pgtest"
 SERVICE = "ingest"
 SCHEDULER = "scheduler"
+BACKUP = "backup"
 OVERRIDE = "test-scheduler.yml"
 CONTAINER_DB = "/app/data/prices.db"
 HOST_ALIAS = "host.docker.internal"
@@ -66,6 +70,8 @@ def guard_docker_args(args) -> None:
             raise ValueError(f"los tests no pueden usar ni sustituir la imagen real {IMAGE}")
         if str(REAL_DATA) in arg:
             raise ValueError("los tests no pueden usar la carpeta data/ real")
+        if str(REAL_BACKUPS) in arg:
+            raise ValueError("los tests no pueden usar la carpeta backups/ real")
 
 
 def docker(*args, env=None, cwd=None, timeout=300, input=None) -> subprocess.CompletedProcess:
@@ -157,9 +163,17 @@ class Project:
     def compose_file(self) -> Path:
         return self.root / "docker-compose.yml"
 
+    @property
+    def backups(self) -> Path:
+        return self.root / "backups"
+
     def write_env(self, uid=None, gid=None, drop=(), **extra) -> None:
+        """`.env` del proyecto temporal. Lleva `COLLECTION_ENABLED=true` salvo
+        que se quite con `drop` o se dé otro valor: casi todos los tests
+        esperan que el programador capture."""
         values = {"HOST_UID": uid if uid is not None else os.getuid(),
-                  "HOST_GID": gid if gid is not None else os.getgid(), **extra}
+                  "HOST_GID": gid if gid is not None else os.getgid(),
+                  "COLLECTION_ENABLED": "true", **extra}
         lines = [f"{k}={v}\n" for k, v in values.items() if k not in drop]
         (self.root / ".env").write_text("".join(lines))
 
@@ -177,7 +191,7 @@ class Project:
         return docker("compose", "-p", self.name, *self.compose_files(), *args,
                       env=env, cwd=cwd or self.root, timeout=timeout)
 
-    def start_scheduler(self, url, timeout=300) -> subprocess.CompletedProcess:
+    def start_scheduler(self, url, timeout=300, environment=None) -> subprocess.CompletedProcess:
         """`docker compose up -d` con el programador apuntando a `url` (obligatoria).
 
         Es la única forma de arrancar el programador en los tests: la URL va
@@ -192,6 +206,8 @@ class Project:
             f"      INGEST_API_URL: \"{url}\"\n"
             f"      NO_PROXY: \"{NO_PROXY_VALUE}\"\n"
             f"      no_proxy: \"{NO_PROXY_VALUE}\"\n"
+            + "".join(f"      {key}: {json.dumps(value)}\n"
+                      for key, value in (environment or {}).items())
         )
         return self.compose("up", "-d", timeout=timeout)
 
@@ -199,8 +215,29 @@ class Project:
         result = self.compose("logs", "--no-log-prefix", SCHEDULER, timeout=60)
         return result.stdout + result.stderr
 
-    def exec_check(self, timeout=120) -> subprocess.CompletedProcess:
-        """Comprobación horaria simulada: el mismo comando que lanza supercronic."""
+    def wait_startup(self, timeout=120) -> None:
+        """Espera a que termine la comprobación de arranque (captura y copia de
+        arranque): una comprobación simulada a la vez encontraría el bloqueo
+        cogido. Busca `check.py --startup` en /proc del contenedor."""
+        # El patrón lleva el NUL que separa los argumentos en cmdline: así no se
+        # encuentra a sí mismo (en su propio cmdline va escrito como texto).
+        script = ("import glob,sys;sys.exit(any(b'check.py\\x00--startup' in open(p,'rb').read() "
+                  "for p in glob.glob('/proc/[0-9]*/cmdline')))")
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            result = self.compose("exec", "-T", SCHEDULER, "python", "-c", script, timeout=60)
+            if result.returncode == 0:
+                return
+            time.sleep(0.3)
+        raise AssertionError("la comprobación de arranque no termina")
+
+    def exec_check(self, timeout=120, wait_startup=True) -> subprocess.CompletedProcess:
+        """Comprobación horaria simulada: el mismo comando que lanza supercronic.
+
+        Por defecto espera a que termine la de arranque; `wait_startup=False`
+        para los tests que quieren que coincidan."""
+        if wait_startup:
+            self.wait_startup()
         return self.compose("exec", "-T", SCHEDULER, "python", "/app/container/check.py",
                             timeout=timeout)
 
@@ -239,6 +276,27 @@ class Project:
         return docker(*self._run_args(unique_name(), entrypoint, list(args)),
                       cwd=self.root, timeout=timeout)
 
+    def run_backup(self, *args, env=None, container_name=None, timeout=300):
+        """Copia a mano con `docker compose run --rm backup` (por defecto, `--manual`
+        lo pone el servicio). `env` añade variables con `-e` (p. ej. para probar
+        COLLECTION_ENABLED sin pasar por `.env`)."""
+        container_name = container_name or unique_name()
+        run = ["compose", "-p", self.name, "-f", str(self.compose_file), "run", "--rm", "-T",
+               "--name", container_name]
+        for key, value in (env or {}).items():
+            run += ["-e", f"{key}={value}"]
+        result = docker(*run, BACKUP, *args, cwd=self.root, timeout=timeout)
+        result.container_name = container_name
+        return result
+
+    def start_backup(self, container_name) -> subprocess.Popen:
+        """Como `run_backup`, pero en segundo plano (para interrumpirla)."""
+        run = ["compose", "-p", self.name, "-f", str(self.compose_file), "run", "--rm", "-T",
+               "--name", container_name, BACKUP]
+        guard_docker_args(run)
+        return subprocess.Popen(["docker", *run], env=docker_env(), cwd=self.root,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
     def down(self) -> None:
         """Borra la red que deja `run --rm`. Las variables solo sirven para que
         Compose pueda leer el archivo aunque el test haya quitado `.env`."""
@@ -247,9 +305,9 @@ class Project:
         assert result.returncode == 0, result.stderr
 
 
-def make_project(tmp_path, *, uid=None, gid=None, env=True, data=True, build=False,
-                 image=None) -> Project:
-    """Proyecto temporal con `docker-compose.yml`, `.env` y `data/`.
+def make_project(tmp_path, *, uid=None, gid=None, env=True, data=True, backups=True,
+                 build=False, image=None) -> Project:
+    """Proyecto temporal con `docker-compose.yml`, `.env`, `data/` y `backups/`.
 
     `build=True` copia también lo necesario para construir la imagen ahí.
     La imagen de los servicios es siempre una de test (`TEST_IMAGE` o la que
@@ -276,6 +334,8 @@ def make_project(tmp_path, *, uid=None, gid=None, env=True, data=True, build=Fal
         project.write_env(uid, gid)
     if data:
         project.data.mkdir()
+    if backups:
+        project.backups.mkdir()
     return project
 
 

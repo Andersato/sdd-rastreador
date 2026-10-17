@@ -1,6 +1,7 @@
 # Nada de esto debe enviarse a Docker al construir la imagen.
 .venv/
 data/
+backups/
 tests/
 openspec/
 .env

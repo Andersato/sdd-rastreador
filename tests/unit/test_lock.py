@@ -52,7 +52,7 @@ def holder():
 def test_second_process_is_rejected_without_waiting(tmp_path, holder):
     holder(tmp_path)
     start = time.monotonic()
-    with pytest.raises(IngestionBusy, match="ya hay otra ingesta en curso"):
+    with pytest.raises(IngestionBusy, match="ya hay otra ingesta o copia en curso"):
         with data_dir_lock(tmp_path):
             pass
     assert time.monotonic() - start < 2
@@ -102,3 +102,58 @@ def test_unreadable_folder_is_a_controlled_error(tmp_path):
                 pass
     finally:
         folder.chmod(0o700)
+
+
+# --- Espera con plazo (copia de seguridad, D2) --------------------------------
+
+RELEASER = """
+import sys, time
+from pathlib import Path
+from src.ingestion.lock import data_dir_lock
+with data_dir_lock(Path(sys.argv[1])):
+    print("locked", flush=True)
+    time.sleep(float(sys.argv[2]))
+"""
+
+
+def hold_lock_for(folder, seconds):
+    proc = subprocess.Popen([sys.executable, "-c", RELEASER, str(folder), str(seconds)],
+                            cwd=REPO_ROOT, stdout=subprocess.PIPE, text=True)
+    assert proc.stdout.readline().strip() == "locked"
+    return proc
+
+
+def test_waits_until_the_holder_releases(tmp_path):
+    proc = hold_lock_for(tmp_path, 1.5)
+    try:
+        start = time.monotonic()
+        with data_dir_lock(tmp_path, wait_s=10):
+            waited = time.monotonic() - start
+        assert 0.5 < waited < 5
+    finally:
+        proc.wait()
+
+
+def test_gives_up_when_the_wait_runs_out(tmp_path, holder):
+    holder(tmp_path)
+    start = time.monotonic()
+    with pytest.raises(IngestionBusy, match="ya hay otra ingesta o copia en curso"):
+        with data_dir_lock(tmp_path, wait_s=1.2):
+            pass
+    assert 1.0 < time.monotonic() - start < 3
+
+
+def test_shared_deadline_in_the_past_does_not_wait(tmp_path, holder):
+    holder(tmp_path)
+    start = time.monotonic()
+    with pytest.raises(IngestionBusy):
+        with data_dir_lock(tmp_path, deadline=time.monotonic() - 1):
+            pass
+    assert time.monotonic() - start < 1
+
+
+def test_free_lock_is_taken_at_once_even_with_a_wait(tmp_path):
+    sleeps = []
+    with data_dir_lock(tmp_path, wait_s=600, sleep=sleeps.append):
+        pass
+    assert sleeps == []

@@ -18,6 +18,7 @@ FAKE_FILES = {
     "tests/test_x.py": b"def test_x(): pass\n",
     "openspec/specs/x/spec.md": b"# falso\n",
     "src/x.db": b"falso",
+    "backups/prices-2026-10-17.db.gz": b"copia falsa",
 }
 
 
@@ -78,7 +79,7 @@ def test_context_excludes_local_files(image, context, tags, tmp_path):
     sent = {line.removeprefix("/ctx/") for line in result.stdout.split()}
     for rel in FAKE_FILES:
         assert rel not in sent
-    for folder in ("data", ".venv", "tests", "openspec"):
+    for folder in ("data", "backups", ".venv", "tests", "openspec"):
         assert folder not in sent
     assert "src/ingestion/__main__.py" in sent
 

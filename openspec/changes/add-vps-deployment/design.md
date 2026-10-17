@@ -195,9 +195,14 @@ pasa, `os.replace` a la carpeta principal; si no, a `rechazadas/`
 (sustituyendo la de igual nombre); (5) si no ha fallado nada, rotación
 local (D5) con la fecha de Madrid del Mac; (6) resumen y código 0, o 1 si
 algo ha fallado.
-Solo opciones que `openrsync` admite: `-t`, `--list-only`,
-`--include/--exclude`, `-e`. Nada de `--partial-dir`, `--delete` ni
-`--info`.
+**`rsync` de Homebrew, siempre explícito** (ver D11): el script nunca usa
+el `/usr/bin/rsync` del sistema. Busca `/opt/homebrew/bin/rsync` (Apple
+Silicon) y `/usr/local/bin/rsync` (Intel), o el que se indique con
+`--rsync`, y comprueba con `--version` que es el rsync de GNU (versión 3.x),
+no `openrsync`. Si no lo encuentra, termina antes de conectar con un
+mensaje claro: falta el rsync de Homebrew, `brew install rsync`. Opciones
+usadas: `-t`, `--list-only`, `--include/--exclude`, `-e`; nada de
+`--delete`.
 
 ### D11. Clave dedicada con `rrsync`
 En el Mac, `ssh-keygen -t ed25519 -N "" -f ~/.ssh/precios-backups`. En el
@@ -207,11 +212,13 @@ VPS, una línea a mano en `~deploy/.ssh/authorized_keys`:
 que `rrsync` resuelve dentro de `backups/`. La primera conexión se acepta a
 mano (huella en `known_hosts`) antes de cargar `launchd`, porque
 `BatchMode` no puede preguntar.
-**Riesgo `openrsync` + `rrsync`:** `rrsync` valida las opciones que manda el
-cliente y `openrsync` no las manda exactamente igual que el rsync de GNU. Se
-comprueba antes de escribir `pull.py` (tarea 3.1). Si no funciona, se
-consulta al usuario antes de usar el `rsync` de Homebrew (dependencia
-nueva).
+**`openrsync` + `rrsync` no funciona** (tarea 3.1, 2026-10-16): con el
+`rsync` de macOS, `rrsync` rechaza el comando ("invalid rsync-command syntax
+or options"). Con el `rsync` de Homebrew funcionan el listado y la descarga.
+El usuario aprueba el `rsync` de Homebrew como **dependencia del Mac, solo
+para el script de descarga** (`brew install rsync`); se documenta en el
+README y en el runbook. La clave dedicada no abre terminal
+("rrsync error: Not invoked via sshd").
 
 ### D12. `launchd`
 `docs/offsite-backups.md` incluye `es.preciosgasolineras.pull-backups.plist`
@@ -245,8 +252,9 @@ exige que aparezca en la documentación.
 
 ## Risks / Trade-offs
 
-- [`openrsync` no acepta las opciones que exige `rrsync`] → se prueba lo
-  primero del grupo 3; si falla, se consulta antes de usar Homebrew.
+- [`openrsync` no acepta las opciones que exige `rrsync`] → confirmado en
+  la tarea 3.1; se usa el `rsync` de Homebrew, explícito y comprobado por
+  versión, con un error claro si falta (D10).
 - [La marca de pendiente queda de un día anterior (el contenedor sigue en
   marcha tras medianoche)] → se ignora y se borra si su fecha no es la de
   hoy.

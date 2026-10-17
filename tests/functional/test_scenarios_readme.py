@@ -61,3 +61,27 @@ def test_scenario_readme_api_url_only_for_tests(section):
     part = section.split(heading, 1)[1]
     assert "INGEST_API_URL" in part
     assert "no la pongas en el uso normal" in part
+
+
+def test_scenario_readme_one_machine_collects(section):
+    """Escenario: Una sola máquina recoge."""
+    heading = next(line for line in section.splitlines() if "Una sola máquina recoge" in line)
+    part = section.split(heading, 1)[1].split("\n### ", 1)[0]
+    assert "COLLECTION_ENABLED=true" in part
+    assert "VPS" in part
+    assert "no hace nada" in part
+    assert re.search(r"no lances `docker compose run --rm ingest` contra la\s+API real en otra máquina",
+                     part)
+    assert "partiría" in part or "parte el histórico en dos bases" in part
+    assert "backups" in section
+
+
+def test_readme_backups_section():
+    """2.9: sección de copias del README (cuándo, dónde, copia a mano, log)."""
+    text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    body = text.split("## Copias de seguridad", 1)[1]
+    body = re.split(r"^## ", body, maxsplit=1, flags=re.MULTILINE)[0]
+    for needed in ("04:43", "26 horas", "docker compose run --rm backup", "backups/",
+                   "prices-AAAA-MM-DD.db.gz", "7 más recientes", "4 semanales",
+                   "copia guardada:", "copia pendiente:", "COLLECTION_ENABLED=true"):
+        assert needed in body, needed

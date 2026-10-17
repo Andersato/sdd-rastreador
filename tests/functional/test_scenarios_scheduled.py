@@ -153,7 +153,7 @@ def test_scenario_manual_capture_during_check(http_server, tmp_path):
     try:
         wait_for_request(http_server, "/manual")
         result = check(http_server, db, "2026-10-12T12:17:00Z", fixture="valid_two_stations.json")
-        assert lines(result) == ["2026-10-12 14:17:00 CEST · otra ingesta en curso; no se captura"]
+        assert lines(result) == ["2026-10-12 14:17:00 CEST · otra ingesta o copia en curso; no se captura"]
         assert http_server.count("/api") == 0
         manual.communicate(timeout=30)
         assert manual.returncode == 0

@@ -1,7 +1,8 @@
 """Programa de arranque del servicio `scheduler`.
 
-Escribe el crontab (una comprobación cada hora en el minuto 17), lanza
-supercronic y una comprobación inmediata, y se queda vigilándolos:
+Escribe el crontab (una comprobación cada hora en el minuto 17 y la copia
+diaria a las 04:43), borra la marca de copia pendiente, lanza supercronic y
+la comprobación de arranque (`check.py --startup`), y se queda vigilándolos:
 
 - Recoge a los hijos que terminan y, cuando ya no le queda ninguno, sale con
   el código de supercronic (si muere por su cuenta, Docker reinicia el
@@ -20,23 +21,29 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
+from settings import collection_state
 from src.ingestion.scheduled import madrid_time
 
 CRONTAB_PATH = "/tmp/crontab"
 CHECK_COMMAND = "python /app/container/check.py"
 CRON_MINUTE = 17  # nunca :00, la hora punta de peticiones a la API
+BACKUP_COMMAND = "python /app/container/backup.py --daily"
+BACKUP_TIME = (43, 4)  # 04:43 de Madrid: lejos del minuto 17 y existe todos los días
+MARKER = "/tmp/backup-pending"
 SUPERCRONIC = ["/usr/local/bin/supercronic", "-passthrough-logs", "-quiet"]
 
 
 def crontab() -> str:
-    return f"{CRON_MINUTE} * * * * {CHECK_COMMAND}\n"
+    minute, hour = BACKUP_TIME
+    return (f"{CRON_MINUTE} * * * * {CHECK_COMMAND}\n"
+            f"{minute} {hour} * * * {BACKUP_COMMAND}\n")
 
 
 def startup_line(env: dict[str, str], now: datetime) -> str:
     interval = env.get("CAPTURE_INTERVAL_HOURS")
     configured = repr(interval) if interval else "6 (por defecto)"
     return (f"{madrid_time(now)} · programador en marcha: comprobación ahora y cada hora en el "
-            f"minuto {CRON_MINUTE}; intervalo configurado: {configured}")
+            f"minuto {CRON_MINUTE}; intervalo configurado: {configured}; {collection_state(env)}")
 
 
 def stop_all(signum, frame, kill=os.kill) -> None:
@@ -63,11 +70,17 @@ def main(
         return 2
     with open(CRONTAB_PATH, "w") as out:
         out.write(crontab())
+    # /tmp sobrevive a un reinicio del contenedor: una copia pendiente de antes
+    # de reiniciar no se recupera (solo cuenta la regla de 26 h, D6).
+    try:
+        os.unlink(MARKER)
+    except FileNotFoundError:
+        pass
     print(startup_line(env, now or datetime.now(timezone.utc)), flush=True)
     install(signal.SIGTERM, stop_all)
     install(signal.SIGINT, stop_all)
     cron = popen([*SUPERCRONIC, CRONTAB_PATH])
-    popen([sys.executable, "/app/container/check.py"])  # comprobación de arranque
+    popen([sys.executable, "/app/container/check.py", "--startup"])  # comprobación de arranque
     # Al parar, supercronic sale sin esperar a la comprobación de arranque (no
     # es trabajo suyo): se espera a todos los hijos antes de salir, porque al
     # terminar el contenedor se matarían a mitad del ROLLBACK (D12).

@@ -378,6 +378,10 @@ escribir ni borrar y sin leer fuera de `backups/`.
 - **WHEN** se lee la configuración del script y la sección de copia fuera del VPS en `docs/`
 - **THEN** la clave que usa es la dedicada (por defecto `~/.ssh/precios-backups`) y la documentación explica crearla con `ssh-keygen` sin contraseña y añadirla a mano en `authorized_keys` con la restricción, no con `ssh-copy-id`
 
+#### Scenario: Sin el rsync de Homebrew
+- **WHEN** en el Mac no está instalado el `rsync` de Homebrew (solo existe el `/usr/bin/rsync` del sistema) y se lanza el script
+- **THEN** termina con código distinto de 0 antes de conectar, con un mensaje que dice que falta el `rsync` de Homebrew y cómo instalarlo (`brew install rsync`), sin usar `/usr/bin/rsync`, y la carpeta del Mac queda igual que antes
+
 #### Scenario: Clave dedicada ausente
 - **WHEN** no existe la clave dedicada en el Mac y se lanza el script
 - **THEN** termina con código distinto de 0, indica qué clave falta y cómo crearla, no prueba ninguna otra clave y la carpeta del Mac queda igual que antes

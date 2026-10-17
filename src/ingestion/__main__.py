@@ -3,7 +3,7 @@
 
 Descarga una vez los precios de la API del Ministerio, los normaliza y los
 guarda como una captura. Código de salida 0 si se guarda (aunque haya avisos),
-3 si ya hay otra ingesta en curso sobre la misma carpeta, 4 si la respuesta
+3 si ya hay otra ingesta o copia en curso sobre la misma carpeta, 4 si la respuesta
 es sospechosamente corta y 1 si falla por otro motivo (en todos esos casos no
 se guarda nada). Con Ctrl+C o SIGTERM se interrumpe sin dejar nada a medias
 (código 130).

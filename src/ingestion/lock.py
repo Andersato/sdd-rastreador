@@ -14,6 +14,7 @@ proceso del Mac junto a uno de un contenedor.
 import fcntl
 import os
 import signal
+import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -21,20 +22,38 @@ from pathlib import Path
 from .errors import IngestionBusy, StorageError
 
 
+RETRY_S = 1.0
+
+
 @contextmanager
-def data_dir_lock(folder: Path) -> Iterator[None]:
-    """Coge el bloqueo de `folder` sin esperar; `IngestionBusy` si ya lo tiene otro."""
+def data_dir_lock(folder: Path, wait_s: float = 0, *, deadline: float | None = None,
+                  sleep=time.sleep, monotonic=time.monotonic) -> Iterator[None]:
+    """Coge el bloqueo de `folder`; `IngestionBusy` si ya lo tiene otro.
+
+    Sin `wait_s` ni `deadline` no espera (la ingesta). La copia de seguridad
+    espera reintentando cada segundo hasta `wait_s` segundos, o hasta el
+    instante `deadline` de `monotonic()`, que comparten sus dos bloqueos.
+    """
     try:
         fd = os.open(folder, os.O_RDONLY)
     except OSError as exc:
         raise StorageError(
             f"no se ha podido crear o escribir la base de datos en {folder}: {exc}"
         ) from exc
+    if deadline is None:
+        deadline = monotonic() + wait_s
     try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError as exc:
-            raise IngestionBusy(f"ya hay otra ingesta en curso sobre {folder}") from exc
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError as exc:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise IngestionBusy(
+                        f"ya hay otra ingesta o copia en curso sobre {folder}"
+                    ) from exc
+                sleep(min(RETRY_S, remaining))
         yield
     finally:
         os.close(fd)

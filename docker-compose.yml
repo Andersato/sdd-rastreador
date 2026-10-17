@@ -1,9 +1,27 @@
 # Ingesta de precios en contenedores. Uso (ver README):
 #   docker compose build
-#   docker compose up -d            # programador: captura sola cada 6 h
+#   docker compose up -d            # programador: captura sola cada 6 h y copia a las 04:43
 #   docker compose run --rm ingest  # una captura a mano
+#   docker compose run --rm backup  # una copia de seguridad a mano
 
-# Lo común a los dos servicios: misma imagen, mismo usuario y misma carpeta.
+# Carpetas montadas con la sintaxis larga para que Docker no las cree si
+# faltan (en Linux quedarían a nombre de root).
+x-data: &data
+  type: bind
+  source: ./data
+  target: /app/data
+  bind:
+    create_host_path: false
+
+# Copias de seguridad: fuera de ./data, solo en el programador y en `backup`.
+x-backups: &backups
+  type: bind
+  source: ./backups
+  target: /app/backups
+  bind:
+    create_host_path: false
+
+# Lo común a los servicios: misma imagen y mismo usuario.
 x-app: &app
   build: .
   image: precios-gasolineras-ingest
@@ -12,14 +30,6 @@ x-app: &app
   user: "${HOST_UID:?falta HOST_UID en .env (ver README)}:${HOST_GID:?falta HOST_GID en .env (ver README)}"
   # Init como proceso 1: reenvía SIGTERM/SIGINT y recoge procesos huérfanos.
   init: true
-  volumes:
-    # Sintaxis larga para que Docker no cree ./data si falta (en Linux
-    # quedaría a nombre de root).
-    - type: bind
-      source: ./data
-      target: /app/data
-      bind:
-        create_host_path: false
 
 services:
   ingest:
@@ -28,14 +38,18 @@ services:
     # `docker compose run --rm ingest` sí.
     profiles: ["manual"]
     restart: "no"
+    volumes: [*data]
 
   scheduler:
     <<: *app
     entrypoint: ["python", "/app/container/scheduler.py"]
     restart: unless-stopped
+    volumes: [*data, *backups]
     environment:
       TZ: Europe/Madrid
       CAPTURE_INTERVAL_HOURS: ${CAPTURE_INTERVAL_HOURS:-}
+      # Solo la máquina con COLLECTION_ENABLED=true captura y copia (hoy, el VPS).
+      COLLECTION_ENABLED: ${COLLECTION_ENABLED:-}
       # Solo para pruebas (servidor local); vacío = API del Ministerio.
       INGEST_API_URL: ${INGEST_API_URL:-}
     logging:
@@ -43,3 +57,15 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+  backup:
+    <<: *app
+    # Copia a mano, también con el programador parado. Como `ingest`, en el
+    # perfil `manual`: `docker compose up` no la lanza.
+    profiles: ["manual"]
+    restart: "no"
+    entrypoint: ["python", "/app/container/backup.py", "--manual"]
+    volumes: [*data, *backups]
+    environment:
+      TZ: Europe/Madrid
+      COLLECTION_ENABLED: ${COLLECTION_ENABLED:-}
