@@ -525,7 +525,8 @@ docker compose logs --tail 5 scheduler    #    "recogida activada"
 - **Si `docker compose build` falla**, el programador sigue en marcha con la
   imagen anterior: no se ha parado nada. Para volver a la versión de antes:
   `git log --oneline -3`, `git checkout <commit anterior>`,
-  `docker compose build` y `docker compose up -d`.
+  `docker compose build` y `docker compose up -d --remove-orphans` (si la
+  versión de antes no tenía la API, `--remove-orphans` quita su contenedor).
 
 ### Actualizar el VPS ya desplegado a la versión con copias (`add-vps-deployment`)
 
@@ -559,6 +560,69 @@ ls -ln backups/
   `copia guardada: prices-AAAA-MM-DD.db.gz (… MB, N capturas, integridad correcta)`,
   y el archivo en `backups/` a nombre de `deploy`.
 
+### Actualizar el VPS a la versión con la API (`add-prices-api`)
+
+La API arranca con el mismo `docker compose up -d`. **No se abre ningún
+puerto en `ufw`**: la API solo escucha en `127.0.0.1` del servidor (Docker
+se saltaría `ufw` si se publicara en todas las interfaces) y se usa con el
+túnel de la sección 14.
+
+**[VPS]**
+
+```sh
+cd ~/sdd-rastreador
+docker compose run --rm backup                     # 1. copia a mano
+git pull                                           # 2.
+docker compose build                               # 3. descarga FastAPI y uvicorn de PyPI
+docker compose up -d                               # 4.
+docker compose ps                                  # 5. scheduler y api: Up
+curl -s http://127.0.0.1:8000/api/health; echo     # 6. "status":"ok"
+sudo ss -tlnp | grep ':8000'                       # 7. solo 127.0.0.1:8000
+sudo ufw status                                    # 8. solo OpenSSH, como antes
+```
+
+- Paso 6: si devuelve `base_ocupada` (el programador recién arrancado está
+  guardando una captura) o `"status":"desactualizada"`, se repite pasados
+  unos segundos o tras la siguiente captura; solo hay que investigar si
+  sigue igual.
+- Paso 7: tiene que salir **solo** `127.0.0.1:8000`. **Si sale
+  `0.0.0.0:8000` o `[::]:8000`, la API está expuesta**: se para en ese
+  momento con `docker compose stop api` y se revisan los puertos del
+  servicio `api` en `docker-compose.yml` (tienen que ser
+  `"127.0.0.1:8000:8000"`). No se toca `ufw`.
+
+## 14. Usar la API desde el Mac (túnel SSH)
+
+**[Mac]** Se abre el túnel y se deja abierto mientras se consulta:
+
+```sh
+ssh -N -L 8000:127.0.0.1:8000 deploy@<IP_DEL_VPS>
+# o, con el alias de la sección 3: ssh -N -L 8000:127.0.0.1:8000 vps-gasolineras
+```
+
+- Mientras está abierto, la API del VPS está en
+  `http://127.0.0.1:8000/api/docs` del Mac (la página carga sus estilos de
+  internet).
+- Se cierra con **Ctrl+C**.
+- Si el puerto 8000 del Mac está ocupado (por ejemplo, por la API local del
+  Mac), se usa otro puerto local: `ssh -N -L 8001:127.0.0.1:8000 …` y
+  `http://127.0.0.1:8001/api/docs`.
+
+**[Mac]** Comprobación de que desde fuera, sin túnel, no se llega:
+
+```sh
+curl -m 5 http://<IP_DEL_VPS>:8000/api/health    # → falla (sin conexión)
+```
+
+**Tiempos de respuesta.** El log de la API apunta lo que tarda cada
+petición en el servidor, sin la red (`… → 200 (14 ms)`):
+
+**[VPS]**
+
+```sh
+docker compose logs --tail 40 api
+```
+
 ## Registro
 
 | Fecha | Qué | Resultado |
@@ -570,4 +634,5 @@ ls -ln backups/
 | 2026-10-17 | Reinicio del VPS tras la sección 5 | ✓ `swapon --show` igual tras reiniciar. El programador volvió solo (`Up About a minute`); a las 10:38:29, `programador en marcha … recogida activada` y `no toca capturar: última captura hace 1 h 21 min`. No repitió la copia (la de hoy tenía menos de 26 h). |
 | | Primera copia diaria de las 04:43 (2026-10-18): `docker compose logs scheduler \| grep '2026-10-18 04:4'` muestra `copia guardada: prices-2026-10-18.db.gz` | pendiente (posterior al archivo) |
 | | Recuperación tras un reinicio automático de `unattended-upgrades` a las 05:30 | pendiente: se comprueba cuando ocurra (posterior al archivo) |
+| | Actualización a la versión con la API (sección 13) y túnel (sección 14) | pendiente |
 | 2026-10-17 | Actualización a la versión con copias (sección 13), commit `ee22b24` | ✓ Copia previa en solo lectura: `ok`, 12 capturas (8 del Mac + 15:17, 21:17, 03:17 y 09:17 del VPS). Arranque a las 10:15:54 con `recogida activada`; la comprobación de arranque hizo la primera copia (regla de 26 h, no había ninguna): `prices-2026-10-17.db.gz (11,5 MB, 12 capturas, integridad correcta)`. Copia a mano a las 10:18:34, igual. `backups/prices-2026-10-17.db.gz` a nombre de `deploy` (1000:1000 en este VPS). |

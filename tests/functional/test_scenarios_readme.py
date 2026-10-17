@@ -85,3 +85,39 @@ def test_readme_backups_section():
                    "prices-AAAA-MM-DD.db.gz", "7 más recientes", "4 semanales",
                    "copia guardada:", "copia pendiente:", "COLLECTION_ENABLED=true"):
         assert needed in body, needed
+
+
+# --- «Documentación de la API en el README» (prices-api) ------------------------
+
+API_TITLE = "## API de consulta"
+
+
+@pytest.fixture(scope="module")
+def api_section():
+    text = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    assert API_TITLE in text, "el README no tiene la sección de la API"
+    body = text.split(API_TITLE, 1)[1]
+    return re.split(r"^## ", body, maxsplit=1, flags=re.MULTILINE)[0]
+
+
+@pytest.mark.parametrize("needed", [
+    "docker compose up -d",
+    "http://127.0.0.1:8000/api/docs",
+    "ssh -N -L 8000:127.0.0.1:8000 deploy@<IP_DEL_VPS>",
+    "./data",
+    "./backups",
+    "CAPTURE_INTERVAL_HOURS",
+    "13 h",
+    "solo lectura",
+    "Nunca modifica la base",
+    "8000 ya está ocupado",
+])
+def test_readme_api_section(api_section, needed):
+    """Escenario: Lectura del README."""
+    assert needed in api_section
+
+
+def test_readme_health_states(api_section):
+    for state in ("`ok`", "`desactualizada`", "`configuracion_no_valida`", "`error`"):
+        assert state in api_section
+    assert "dos veces" in api_section and "más 1 hora" in api_section

@@ -79,10 +79,12 @@ def test_activation_only_scheduler_with_host_user_and_startup_capture(project, h
     http_server.add_fixture("/api", "valid_two_stations.json")
     result = project.start_scheduler(container_url(http_server, "/api"))
     assert result.returncode == 0, result.stderr
-    assert running_services(project) == [("scheduler", "running")]
-    uid = project.compose("exec", "-T", "scheduler", "id", "-u", timeout=60).stdout.strip()
-    gid = project.compose("exec", "-T", "scheduler", "id", "-g", timeout=60).stdout.strip()
-    assert (int(uid), int(gid)) == (os.getuid(), os.getgid())
+    # Exactamente dos contenedores: el programador y la API de prices-api.
+    assert running_services(project) == [("api", "running"), ("scheduler", "running")]
+    for service in ("scheduler", "api"):
+        uid = project.compose("exec", "-T", service, "id", "-u", timeout=60).stdout.strip()
+        gid = project.compose("exec", "-T", service, "id", "-g", timeout=60).stdout.strip()
+        assert (int(uid), int(gid)) == (os.getuid(), os.getgid())
     wait_logs(project, "captura guardada (no hay capturas)")
     assert "programador en marcha" in project.scheduler_logs()
     assert http_server.requests == {"/api": 1}
@@ -144,7 +146,11 @@ def test_root_keeps_running_without_requests(project, http_server, uid, gid, rea
     wait_logs(project, reason)
     outputs = project.scheduler_logs() + "".join(project.exec_check().stdout for _ in range(2))
     assert outputs.count(reason) == 3  # al arrancar y en 2 comprobaciones
-    assert running_services(project) == [("scheduler", "running")]
+    # Diferencia intencionada (prices-api): la API, con root, no arranca y Docker
+    # la reintenta (entre intento e intento puede verse «running» un instante);
+    # el programador sigue en marcha.
+    assert dict(running_services(project))["scheduler"] == "running"
+    assert wait_until(lambda: "no se permite ejecutar la API" in project.api_logs(), 60)
     restarts = docker("inspect", "-f", "{{.RestartCount}}", container_id(project), timeout=60)
     assert restarts.stdout.strip() == "0"
     assert http_server.requests == {}
@@ -158,7 +164,7 @@ def test_invalid_interval_keeps_running_without_requests(project, http_server):
     assert project.start_scheduler(container_url(http_server, "/api")).returncode == 0
     wait_logs(project, "configuración no válida: CAPTURE_INTERVAL_HOURS no válido: 'seis'; "
                        "se admiten horas enteras de 1 a 24")
-    assert running_services(project) == [("scheduler", "running")]
+    assert running_services(project) == [("api", "running"), ("scheduler", "running")]
     assert http_server.requests == {}
     assert dir_state(project.data) == {}
 
@@ -333,14 +339,15 @@ def test_supercronic_pinned_version_and_valid_crontab(image):
 
 
 def test_compose_build_single_image_for_both_services(project):
-    """Escenarios: Construcción (una sola imagen para los servicios) y Copia a mano
-    con la misma imagen."""
+    """Escenarios: Construcción (una sola imagen para el programador, la API y la
+    ingesta a mano) y Copia a mano con la misma imagen."""
     default = project.compose("config", "--services", timeout=60).stdout.split()
-    assert default == ["scheduler"]
+    assert sorted(default) == ["api", "scheduler"]
     config = json.loads(project.compose("--profile", "manual", "config", "--format", "json",
                                         timeout=60).stdout)
     images = {name: svc["image"] for name, svc in config["services"].items()}
-    assert images == {"ingest": TEST_IMAGE, "scheduler": TEST_IMAGE, "backup": TEST_IMAGE}
+    assert images == {"ingest": TEST_IMAGE, "scheduler": TEST_IMAGE, "backup": TEST_IMAGE,
+                      "api": TEST_IMAGE}
     assert project.run_entrypoint("python", "-c", "print('ok')").stdout.strip() == "ok"
 
 

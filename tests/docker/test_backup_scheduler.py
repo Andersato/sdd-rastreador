@@ -128,7 +128,7 @@ def test_failed_daily_copy_does_not_stop_the_scheduler(project, http_server):
         assert dir_state(project.backups) == before
     finally:
         project.backups.chmod(0o755)
-    assert running_services(project) == [("scheduler", "running")]
+    assert running_services(project) == [("api", "running"), ("scheduler", "running")]
     assert restarts(project) == "0"
     check = project.exec_check()
     assert "no toca capturar" in check.stdout, check.stdout + check.stderr

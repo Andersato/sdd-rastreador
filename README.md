@@ -2,7 +2,8 @@
 
 Recoge los precios de todas las gasolineras de España desde la API oficial del
 Ministerio y los guarda como capturas con fecha y hora, para construir un
-histórico propio (la API solo ofrece los precios actuales).
+histórico propio (la API solo ofrece los precios actuales). Una API web de
+solo lectura permite consultarlos (ver «API de consulta»).
 
 ## Requisitos
 
@@ -19,8 +20,10 @@ source .venv/bin/activate
 pip install -r requirements-dev.txt
 ```
 
-`requirements-dev.txt` solo contiene `pytest`, para los tests. La ingesta no
-necesita ninguna dependencia externa.
+`requirements.txt` fija FastAPI, uvicorn y todo lo que instalan, para la API
+web; `requirements-dev.txt` lo incluye y añade `pytest` y `httpx` (este
+último solo para los tests de la API). La ingesta y las copias no usan
+ninguna dependencia externa.
 
 ## Recoger los precios
 
@@ -346,6 +349,65 @@ si no encuentra el de Homebrew, termina diciendo cómo instalarlo. La clave
 SSH dedicada, la restricción en el VPS y cómo programarlo con `launchd`
 están en `docs/offsite-backups.md`. Para restaurar una copia,
 `docs/restore.md`.
+
+## API de consulta
+
+Una API web de **solo lectura** sobre `data/prices.db`: gasolineras cercanas,
+ficha de una estación, combustibles y precio medio por provincia, siempre de
+la última captura. Nunca modifica la base: monta `./data` en solo lectura y
+abre la base solo para leer. Todas las respuestas llevan la atribución al
+Ministerio y las de datos, la captura de la que salen.
+
+### Arrancarla
+
+Con el mismo `docker compose up -d` del programador (necesita `./data` y
+`./backups`, como él). Arranca igual en el Mac (con la base local, aunque no
+recoja) y en el VPS:
+
+```sh
+docker compose build
+docker compose up -d
+docker compose ps                         # scheduler y api en marcha
+curl -s http://127.0.0.1:8000/api/health; echo
+```
+
+- URL: `http://127.0.0.1:8000/api/`. Documentación interactiva, con todas
+  las rutas y sus parámetros: **`http://127.0.0.1:8000/api/docs`** (carga
+  sus estilos de internet).
+- Solo escucha en `127.0.0.1` de la máquina: nunca en la red. Si el puerto
+  8000 ya está ocupado, `docker compose up -d` falla con el mensaje de
+  Docker; hay que liberarlo.
+- Su log, una línea por petición (las coordenadas de las búsquedas van
+  redondeadas a 2 decimales): `docker compose logs api`.
+
+### Usarla desde el Mac contra el VPS
+
+En el VPS la API tampoco se publica hacia fuera: se usa con un **túnel SSH**
+desde el Mac, abierto mientras se consulta:
+
+```sh
+ssh -N -L 8000:127.0.0.1:8000 deploy@<IP_DEL_VPS>
+```
+
+Mientras está abierto, `http://127.0.0.1:8000/api/docs` del Mac es la API
+del VPS. Se cierra con Ctrl+C. Si en el Mac está en marcha la API local (que
+ya usa el 8000), se usa otro puerto: `-L 8001:127.0.0.1:8000` y
+`http://127.0.0.1:8001/api/docs`. Más detalles en el runbook
+([docs/vps-deployment.md](docs/vps-deployment.md)).
+
+### Qué dice la salud
+
+`GET /api/health` responde con `status`:
+
+- `ok`: la base se lee y la última captura es reciente.
+- `desactualizada`: la última captura tiene más de **dos veces
+  `CAPTURE_INTERVAL_HOURS` más 1 hora** (13 h con el intervalo por defecto
+  de 6 h). En el Mac, que no recoge, es lo normal.
+- `configuracion_no_valida`: `CAPTURE_INTERVAL_HOURS` no es válido (el
+  programador tampoco recoge).
+- `error`, con código 503: no hay base, no se puede leer, está ocupada
+  guardando una captura (se repite en unos segundos) o la última recogida
+  quedó a medias.
 
 ## Protección del proyecto real frente a los agentes de Claude Code
 

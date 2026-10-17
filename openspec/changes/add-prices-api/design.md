@@ -81,10 +81,26 @@ Cada petición de datos hace:
 4. A partir de ahí, todas las consultas de la petición dentro de la misma
    transacción (D3) y `COMMIT` + `close()` antes de construir la respuesta.
 
-Errores traducidos: `SQLITE_BUSY` → `base_ocupada`; 776 →
+Errores traducidos (después de coger el candado): `SQLITE_BUSY` → `base_ocupada`; 776 →
 `recogida_a_medias`; `SQLITE_NOTADB` o cualquier otro error al abrir/leer la
 cabecera → `base_ilegible`; versión 0 sin tabla `snapshots` o sin filas →
 `sin_capturas`; versión distinta de 0 y 1 → `base_no_compatible`.
+
+**Lecturas de una en una dentro del proceso.** Antes de abrir la base, cada
+petición coge un candado del proceso (`threading.Lock`), con una espera de
+como mucho 2 s (`api_ocupada`, 503, `Retry-After: 5`), y lo suelta al cerrar
+la conexión. Motivo, encontrado al implementar la tarea 7.1: en Unix, SQLite
+lleva los bloqueos de lectura por proceso; con varias peticiones a la vez en
+los hilos de uvicorn, el proceso casi nunca suelta su bloqueo de lectura y,
+además, una lectura nueva en un proceso que ya lo tiene no mira si la
+ingesta está esperando para guardar. La ingesta se queda sin turno: con 4
+clientes HTTP seguidos tardó 4,27 s en guardar (al límite de sus 5 s) y en
+el test falló con «database is locked». Con el candado, entre petición y
+petición el proceso suelta el bloqueo, la ingesta toma el pendiente y la
+siguiente lectura espera: guardó en 0,02 s con 4 y con 8 clientes, y la API
+atendió más peticiones (1.096 frente a 681 en 12 s), porque deja de
+competir consigo misma. Alternativas descartadas: varios procesos de
+uvicorn (mismo problema dentro de cada uno) y WAL (prohibido).
 
 Una conexión nueva por petición cuesta menos de 1 ms y garantiza que una
 base creada o restaurada con la API en marcha se ve en la siguiente petición.
@@ -251,6 +267,9 @@ dependencias nuevas:
   la copia y repite su última captura
   hasta 1.460 capturas con `INSERT … SELECT` (fechas desplazadas 6 h). Avisa
   de que ocupará unos 4–5 GB.
+- `serve.py BASE.db [--port 8765]`: lanza la API sobre esa base, solo en
+  `127.0.0.1` (añadido al implementar, para no tener que escribir el comando
+  de uvicorn a mano).
 - `measure.py URL`: lanza 20 veces cada ruta con parámetros representativos
   (Madrid, `gasoleo-a`, radio 50, una estación real) y muestra el tiempo
   máximo de cada una.

@@ -73,7 +73,8 @@ def test_activation_creates_neither_ingest_nor_backup(project, http_server):
     http_server.add_fixture("/api", "valid_two_stations.json")
     assert project.start_scheduler(container_url(http_server, "/api")).returncode == 0
     wait_logs(project, "captura guardada")
-    assert all_services(project) == ["scheduler"]
+    # Programador y API (add-prices-api), sin `ingest` ni la copia a mano.
+    assert all_services(project) == ["api", "scheduler"]
 
 
 def test_manual_copy_uses_the_same_image(project):

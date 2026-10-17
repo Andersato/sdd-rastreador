@@ -58,7 +58,8 @@ def test_without_variable_mac_by_habit(project, http_server):
     outputs = project.scheduler_logs() + checks(project, 2)
     assert outputs.count(DISABLED) == 3  # al arrancar y en cada comprobación
     assert STARTUP_DISABLED in project.scheduler_logs()
-    assert running_services(project) == [("scheduler", "running")]
+    # La API funciona igual con la recogida desactivada o no válida (prices-api).
+    assert running_services(project) == [("api", "running"), ("scheduler", "running")]
     restarts = docker("inspect", "-f", "{{.RestartCount}}", container_id(project), timeout=60)
     assert restarts.stdout.strip() == "0"
     assert http_server.requests == {}
@@ -83,7 +84,8 @@ def test_invalid_value_keeps_running(project, http_server):
     project.start_scheduler(container_url(http_server, "/api"))
     wait_logs(project, "configuración no válida: COLLECTION_ENABLED no válido: 'yes'; "
                        "solo 'true' activa la recogida")
-    assert running_services(project) == [("scheduler", "running")]
+    # La API funciona igual con la recogida desactivada o no válida (prices-api).
+    assert running_services(project) == [("api", "running"), ("scheduler", "running")]
     assert http_server.requests == {}
     assert dir_state(project.data) == {}
 

@@ -11,6 +11,7 @@ import json
 import os
 import secrets
 import shutil
+import socket
 import sqlite3
 import subprocess
 import time
@@ -31,6 +32,11 @@ TEST_PREFIX = "pgtest"
 SERVICE = "ingest"
 SCHEDULER = "scheduler"
 BACKUP = "backup"
+API = "api"
+# Puerto de la API en el docker-compose.yml real. Los proyectos temporales lo
+# cambian por uno libre: ningún test toca el 8000 del Mac, donde puede estar la
+# API real leyendo el data/ real (design.md, D14).
+API_PORT_LINE = '"127.0.0.1:8000:8000"'
 OVERRIDE = "test-scheduler.yml"
 CONTAINER_DB = "/app/data/prices.db"
 HOST_ALIAS = "host.docker.internal"
@@ -39,7 +45,7 @@ HOST_ALIAS = "host.docker.internal"
 CLOSED_PORT_URL = "http://127.0.0.1:9/api"
 UNRESOLVABLE_URL = "http://api.precios.invalid/api"
 NO_PROXY_VALUE = f"{HOST_ALIAS},127.0.0.1,localhost"
-BUILD_FILES = ("Dockerfile", ".dockerignore", "src", "container")
+BUILD_FILES = ("Dockerfile", ".dockerignore", "requirements.txt", "src", "container")
 
 
 def docker_env(extra=None) -> dict[str, str]:
@@ -150,6 +156,11 @@ class Project:
 
     root: Path
     name: str
+    api_port: int | None = None
+
+    @property
+    def api_url(self) -> str:
+        return f"http://127.0.0.1:{self.api_port}"
 
     @property
     def data(self) -> Path:
@@ -297,6 +308,10 @@ class Project:
         return subprocess.Popen(["docker", *run], env=docker_env(), cwd=self.root,
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
+    def api_logs(self) -> str:
+        result = self.compose("logs", "--no-log-prefix", API, timeout=60)
+        return result.stdout + result.stderr
+
     def down(self) -> None:
         """Borra la red que deja `run --rm`. Las variables solo sirven para que
         Compose pueda leer el archivo aunque el test haya quitado `.env`."""
@@ -305,13 +320,28 @@ class Project:
         assert result.returncode == 0, result.stderr
 
 
+def free_port() -> int:
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def with_api_port(compose: str, port: int) -> str:
+    """`docker-compose.yml` con el puerto de la API cambiado por `port`."""
+    if compose.count(API_PORT_LINE) != 1:
+        raise AssertionError("docker-compose.yml no tiene la línea de puerto de la API esperada")
+    return compose.replace(API_PORT_LINE, f'"127.0.0.1:{port}:8000"')
+
+
 def make_project(tmp_path, *, uid=None, gid=None, env=True, data=True, backups=True,
-                 build=False, image=None) -> Project:
+                 build=False, image=None, real_api_port=False) -> Project:
     """Proyecto temporal con `docker-compose.yml`, `.env`, `data/` y `backups/`.
 
     `build=True` copia también lo necesario para construir la imagen ahí.
     La imagen de los servicios es siempre una de test (`TEST_IMAGE` o la que
-    se indique en `image`), nunca la del proyecto real.
+    se indique en `image`), nunca la del proyecto real. El puerto de la API
+    es uno libre; `real_api_port=True` deja el 8000 del archivo real y solo
+    sirve para comprobar `docker compose config`, nunca para arrancar nada.
     """
     image = image or TEST_IMAGE
     root = Path(tmp_path) / unique_name("proyecto")
@@ -321,6 +351,10 @@ def make_project(tmp_path, *, uid=None, gid=None, env=True, data=True, backups=T
     if compose.count(old) != 1:
         raise AssertionError("docker-compose.yml no tiene la línea de imagen esperada")
     compose = compose.replace(old, f"image: {image}\n")
+    api_port = None
+    if not real_api_port:
+        api_port = free_port()
+        compose = with_api_port(compose, api_port)
     (root / "docker-compose.yml").write_text(compose)
     if build:
         for name in BUILD_FILES:
@@ -329,7 +363,7 @@ def make_project(tmp_path, *, uid=None, gid=None, env=True, data=True, backups=T
                 shutil.copytree(src, root / name, ignore=shutil.ignore_patterns("__pycache__"))
             else:
                 shutil.copy2(src, root / name)
-    project = Project(root=root, name=unique_name())
+    project = Project(root=root, name=unique_name(), api_port=api_port)
     if env:
         project.write_env(uid, gid)
     if data:

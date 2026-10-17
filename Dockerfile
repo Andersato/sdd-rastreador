@@ -28,6 +28,13 @@ RUN groupadd --gid 10001 app \
 
 COPY --from=supercronic --chmod=755 /supercronic /usr/local/bin/supercronic
 
+# Dependencias de la API con versión fija. --no-deps: solo entra lo listado;
+# pip check falla la construcción si la lista está incompleta (design.md, D12).
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --no-deps --root-user-action=ignore -r /tmp/requirements.txt \
+    && pip check \
+    && rm /tmp/requirements.txt
+
 WORKDIR /app
 COPY src/ /app/src/
 COPY container/ /app/container/

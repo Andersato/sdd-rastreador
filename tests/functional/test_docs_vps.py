@@ -44,7 +44,9 @@ def test_every_block_says_where(doc):
 def test_no_secrets(doc):
     """Escenario: Sin secretos."""
     assert "<IP_DEL_VPS>" in doc
-    assert not re.search(r"\b\d{1,3}(\.\d{1,3}){3}\b", doc)
+    # 127.0.0.1 y 0.0.0.0 no son la dirección del servidor: los nombra la API (prices-api).
+    addresses = set(re.findall(r"\b\d{1,3}(?:\.\d{1,3}){3}\b", doc))
+    assert addresses <= {"127.0.0.1", "0.0.0.0"}
     assert "PRIVATE KEY" not in doc
     assert not re.search(r"ssh-ed25519 AAAA[0-9A-Za-z+/]{20,}", doc)
 
@@ -221,3 +223,60 @@ def test_failed_build_keeps_previous_scheduler(doc):
     part = section(doc, "13. Actualizar")
     assert re.search(r"sigue en marcha con la\s+imagen anterior", part)
     assert "git checkout <commit anterior>" in part
+
+
+# --- «API en el VPS solo por túnel SSH» (prices-api) ---------------------------
+
+API_UPDATE = "### Actualizar el VPS a la versión con la API"
+
+
+@pytest.fixture(scope="module")
+def api_update(doc):
+    assert API_UPDATE in doc
+    return doc.split(API_UPDATE, 1)[1].split("\n## ", 1)[0]
+
+
+def test_update_to_the_api_version(api_update):
+    """Escenario: Actualización a la versión con la API."""
+    commands = code(api_update)
+    steps = ["docker compose run --rm backup", "git pull", "docker compose build",
+             "docker compose up -d", "docker compose ps",
+             "curl -s http://127.0.0.1:8000/api/health", "sudo ss -tlnp", "sudo ufw status"]
+    positions = [commands.index(step) for step in steps]
+    assert positions == sorted(positions)
+    assert "127.0.0.1:8000" in api_update and "OpenSSH" in api_update
+    assert "ufw allow" not in api_update
+
+
+def test_health_just_after_starting(api_update):
+    """Escenario: Salud justo después de arrancar."""
+    assert "base_ocupada" in api_update and "desactualizada" in api_update
+    assert "se repite" in api_update
+
+
+def test_port_exposed_by_mistake(api_update):
+    """Escenario: Puerto expuesto por error."""
+    assert "0.0.0.0:8000" in api_update and "[::]:8000" in api_update
+    assert "docker compose stop api" in api_update
+    assert "docker-compose.yml" in api_update
+    assert "No se toca `ufw`" in api_update
+
+
+def test_tunnel_from_the_mac(doc):
+    """Escenario: Túnel desde el Mac."""
+    tunnel = section(doc, "14.")
+    assert "ssh -N -L 8000:127.0.0.1:8000 deploy@<IP_DEL_VPS>" in code(tunnel)
+    assert "http://127.0.0.1:8000/api/docs" in tunnel
+    assert "Ctrl+C" in tunnel
+    assert "-L 8001:127.0.0.1:8000" in tunnel
+
+
+def test_no_ufw_port_is_ever_opened(doc):
+    """Requisito: el runbook nunca indica abrir un puerto en ufw para la API."""
+    assert "ufw allow 8000" not in doc
+    assert not re.search(r"ufw allow (?!OpenSSH)", code(doc))
+
+
+def test_rollback_removes_the_api_container(doc):
+    update = section(doc, "13.")
+    assert "--remove-orphans" in update

@@ -158,6 +158,21 @@ culpa de la API.
 - **WHEN** las lecturas de una petición tardan más de 2 s (en los tests, simulado con una base preparada para ello)
 - **THEN** se cortan, la respuesta es 503 con el código `consulta_demasiado_larga` y la base queda libre para escribir inmediatamente después
 
+### Requirement: Lecturas de la base de una en una
+La API SHALL hacer las lecturas de la base de una sola petición cada vez
+dentro de su proceso, para que la recogida pueda guardar aunque lleguen
+muchas peticiones a la vez. Una petición que lleva 2 s esperando su turno
+MUST responder 503 con el código `api_ocupada` y `Retry-After: 5`. Esa espera
+no cuenta en el límite de 2 s de lectura.
+
+#### Scenario: Muchas peticiones a la vez
+- **WHEN** 8 clientes piden sin parar `GET /api/stations/nearby` con radio 50 km sobre una base de 2.000 estaciones y la ingesta guarda una captura
+- **THEN** la captura se guarda en menos de 1 s y las respuestas son 200
+
+#### Scenario: Turno que no llega
+- **WHEN** una petición tiene el turno de lectura durante más de 2 s y llega otra
+- **THEN** la segunda responde, a los 2 s (con un margen de 0,5 s), 503 con el código `api_ocupada`, el mensaje «la API está atendiendo demasiadas consultas; inténtalo de nuevo en unos segundos» y `Retry-After: 5`, sin abrir la base
+
 ### Requirement: Datos siempre de capturas terminadas
 Las consultas SHALL usar solo capturas completas, y todos los datos de una
 respuesta MUST salir de la misma captura, la que indica `capture`. «La
@@ -295,7 +310,7 @@ raíz de la respuesta, también en los 503; el resto, en `data`.
 - **THEN** `unexposed_fuels` es `[{"name": "Metanol", "stations": 2}]` y `status` sigue siendo `ok`
 
 #### Scenario: Errores de la salud
-- **WHEN** `GET /api/health` responde 503 por cualquier motivo (`sin_base`, `sin_capturas`, `base_ilegible`, `base_no_compatible`, `base_ocupada`, `recogida_a_medias` o `consulta_demasiado_larga`)
+- **WHEN** `GET /api/health` responde 503 por cualquier motivo (`sin_base`, `sin_capturas`, `base_ilegible`, `base_no_compatible`, `base_ocupada`, `recogida_a_medias`, `consulta_demasiado_larga` o `api_ocupada`)
 - **THEN** la respuesta lleva, además de `attribution` y `error`, `"status": "error"`
 
 ### Requirement: Intervalo no válido en la salud

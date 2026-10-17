@@ -110,7 +110,8 @@ def test_recover_ignores_missing_database(tmp_path):
 def test_make_project_never_touches_repo_env(tmp_path, monkeypatch):
     monkeypatch.setattr(helpers, "REPO_ROOT", tmp_path / "repo")
     (tmp_path / "repo").mkdir()
-    (tmp_path / "repo" / "docker-compose.yml").write_text(f"image: {helpers.IMAGE}\n")
+    (tmp_path / "repo" / "docker-compose.yml").write_text(
+        f"image: {helpers.IMAGE}\nports: [{helpers.API_PORT_LINE}]\n")
     project = helpers.make_project(tmp_path / "tmp", uid=1001, gid=1001)
     assert (project.root / ".env").read_text() == (
         "HOST_UID=1001\nHOST_GID=1001\nCOLLECTION_ENABLED=true\n")
@@ -174,3 +175,27 @@ def test_run_backup_rejects_real_project(tmp_path, no_subprocess):
     project = Project(root=tmp_path, name="sdd-rastreador")
     with pytest.raises(ValueError):
         project.run_backup()
+
+
+# --- puerto de la API en los proyectos temporales (add-prices-api, D14) -------
+
+def test_temporary_projects_never_publish_the_real_api_port(tmp_path, no_subprocess):
+    project = helpers.make_project(tmp_path)
+    compose = project.compose_file.read_text()
+    assert helpers.API_PORT_LINE not in compose
+    assert f'"127.0.0.1:{project.api_port}:8000"' in compose
+    assert project.api_port != 8000
+    assert project.api_url == f"http://127.0.0.1:{project.api_port}"
+
+
+def test_real_api_port_only_on_request(tmp_path, no_subprocess):
+    project = helpers.make_project(tmp_path, real_api_port=True)
+    assert helpers.API_PORT_LINE in project.compose_file.read_text()
+    assert project.api_port is None
+
+
+@pytest.mark.parametrize("compose", ["services: {}\n",
+                                     f"a: {helpers.API_PORT_LINE}\nb: {helpers.API_PORT_LINE}\n"])
+def test_api_port_line_must_appear_once(compose):
+    with pytest.raises(AssertionError):
+        helpers.with_api_port(compose, 18000)

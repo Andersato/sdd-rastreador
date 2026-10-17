@@ -1,6 +1,7 @@
-# Ingesta de precios en contenedores. Uso (ver README):
+# Ingesta de precios y API en contenedores. Uso (ver README):
 #   docker compose build
-#   docker compose up -d            # programador: captura sola cada 6 h y copia a las 04:43
+#   docker compose up -d            # programador (captura cada 6 h y copia a las 04:43)
+#                                   # y API en http://127.0.0.1:8000/api/docs
 #   docker compose run --rm ingest  # una captura a mano
 #   docker compose run --rm backup  # una copia de seguridad a mano
 
@@ -69,3 +70,26 @@ services:
     environment:
       TZ: Europe/Madrid
       COLLECTION_ENABLED: ${COLLECTION_ENABLED:-}
+
+  api:
+    <<: *app
+    # API de solo lectura (prices-api). Independiente de COLLECTION_ENABLED.
+    entrypoint: ["python", "/app/container/api.py"]
+    restart: unless-stopped
+    # ./data en solo lectura y sin ./backups: la API nunca escribe.
+    volumes:
+      - <<: *data
+        read_only: true
+    # Solo en 127.0.0.1 del host: Docker se salta ufw, así que nunca se publica
+    # en todas las interfaces. Desde el Mac se usa con un túnel SSH (README).
+    ports:
+      - "127.0.0.1:8000:8000"
+    environment:
+      TZ: Europe/Madrid
+      # Para el umbral de «desactualizada» de la salud (2 × intervalo + 1 h).
+      CAPTURE_INTERVAL_HOURS: ${CAPTURE_INTERVAL_HOURS:-}
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
