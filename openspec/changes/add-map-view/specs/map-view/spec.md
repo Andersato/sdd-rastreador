@@ -37,6 +37,10 @@ GET y HEAD.
 - **WHEN** otro proceso mantiene la base con un bloqueo exclusivo de escritura y se pide `GET /`
 - **THEN** la respuesta es 200 enseguida, sin esperar a la base
 
+#### Scenario: Barra final en una ruta de la API
+- **WHEN** la página se sirve en `/` y se pide `GET /api/fuels/`
+- **THEN** la respuesta es la misma que antes de este cambio: una redirección 307 a `/api/fuels`
+
 #### Scenario: Archivo inexistente
 - **WHEN** se pide `GET /no-existe.js`
 - **THEN** la respuesta es 404 JSON con el código `no_encontrado` y la atribución
@@ -182,6 +186,10 @@ quita al conceder, denegar o agotarse el tiempo.
 - **WHEN** se pinchó en Barcelona mientras se esperaba, después llegó la ubicación (51.5074, -0.1278), se pulsa «Volver a mi ubicación» y la API responde 422 `fuera_de_espana`
 - **THEN** se ve «Ese punto está fuera de España. Pincha en el mapa un punto de España.», el mapa muestra la Península y Baleares enteras, no hay marcador del punto, círculo ni resultados, y «Volver a mi ubicación» desaparece
 
+#### Scenario: Pinchar fuera de España mientras se espera
+- **WHEN** mientras se espera la ubicación se pincha en Rabat (34.0209, -6.8416), la API responde 422 `fuera_de_espana`, y después el navegador entrega (40.416775, -3.703790)
+- **THEN** se sigue viendo el mensaje de fuera de España, no se busca en la ubicación y solo aparece «Volver a mi ubicación»
+
 ### Requirement: Sin ubicación del navegador
 Si el navegador deniega la ubicación, no la tiene o no la entrega en 10 s
 desde que la página la pide, la página SHALL mostrar España peninsular y
@@ -260,7 +268,7 @@ elige el primero. Cambiar de combustible busca si hay punto.
 
 #### Scenario: Lista de combustibles que no se puede usar
 - **WHEN** `/api/fuels` responde 200 pero `data` no es una lista, o ningún elemento es válido
-- **THEN** la página dice «La API ha dado una respuesta inesperada» con un botón «Reintentar», y no pide cercanas
+- **THEN** la página dice «El servidor ha dado una respuesta inesperada» con un botón «Reintentar», y no pide cercanas
 
 ### Requirement: Selector de radio
 La página SHALL ofrecer los radios 5, 10, 25 y 50 km, con 10 km por
@@ -351,11 +359,11 @@ rótulo». Una estación sin precio o sin coordenadas numéricas no se muestra.
 
 #### Scenario: Todas descartadas
 - **WHEN** la respuesta tiene `total` 2 y las dos estaciones tienen `price` `null`
-- **THEN** la página dice «La API ha dado una respuesta inesperada» con «Reintentar», sin lista ni marcadores
+- **THEN** la página dice «El servidor ha dado una respuesta inesperada» con «Reintentar», sin lista ni marcadores
 
 #### Scenario: Respuesta incompleta
 - **WHEN** `/api/stations/nearby` responde 200 sin `data.stations`
-- **THEN** la página dice «La API ha dado una respuesta inesperada» con «Reintentar», y no quedan marcadores de la búsqueda anterior
+- **THEN** la página dice «El servidor ha dado una respuesta inesperada» con «Reintentar», y no quedan marcadores de la búsqueda anterior
 
 ### Requirement: Recuento de gasolineras encontradas
 Tras cada búsqueda con al menos una gasolinera mostrada, la página SHALL
@@ -383,7 +391,7 @@ desaparece.
 
 #### Scenario: Con una descartada
 - **WHEN** la búsqueda a 10 km responde con `total` 3 y 3 estaciones, y una no tiene coordenadas
-- **THEN** se ve «2 gasolineras encontradas» y «1 gasolinera no se muestra por datos incompletos.», y no se ve el aviso de «La API ha devuelto las…»
+- **THEN** se ve «2 gasolineras encontradas» y «1 gasolinera no se muestra por datos incompletos.», y no se ve el aviso de «Hay N gasolineras en este radio…»
 
 #### Scenario: Con dos descartadas
 - **WHEN** la respuesta tiene 5 estaciones y dos tienen `price` `null`
@@ -401,15 +409,15 @@ se avisan aparte. El aviso de la búsqueda anterior desaparece.
 
 #### Scenario: Más de 100 a 25 km
 - **WHEN** la búsqueda a 25 km responde con `total` 342 y 100 estaciones válidas
-- **THEN** se ven las 100 y el texto «La API ha devuelto las 100 más baratas de 342. Reduce el radio para ver menos y más cercanas.»
+- **THEN** se ven las 100 y el texto «Hay 342 gasolineras en este radio; se han pedido las 100 más baratas. Reduce el radio para ver menos y más cercanas.»
 
 #### Scenario: Más de 100 a 5 km
 - **WHEN** la búsqueda a 5 km responde con `total` 130 y 100 estaciones válidas
-- **THEN** se ve «La API ha devuelto las 100 más baratas de 130.», sin sugerir otro radio
+- **THEN** se ve «Hay 130 gasolineras en este radio; se han pedido las 100 más baratas.», sin sugerir otro radio
 
 #### Scenario: Con estaciones descartadas
 - **WHEN** la búsqueda a 25 km responde con `total` 342 y 100 estaciones, de las que 2 no tienen coordenadas
-- **THEN** se ven «98 gasolineras encontradas», «La API ha devuelto las 100 más baratas de 342. Reduce el radio para ver menos y más cercanas.» y «2 gasolineras no se muestran por datos incompletos.»
+- **THEN** se ven «98 gasolineras encontradas», «Hay 342 gasolineras en este radio; se han pedido las 100 más baratas. Reduce el radio para ver menos y más cercanas.» y «2 gasolineras no se muestran por datos incompletos.»
 
 #### Scenario: Todas recibidas y válidas
 - **WHEN** la respuesta tiene `total` 3 y 3 estaciones válidas
@@ -417,10 +425,10 @@ se avisan aparte. El aviso de la búsqueda anterior desaparece.
 
 #### Scenario: Ninguna se puede mostrar
 - **WHEN** la respuesta tiene `total` 342 y 100 estaciones, todas con `price` `null`
-- **THEN** solo se ve «La API ha dado una respuesta inesperada» con «Reintentar», sin aviso de «La API ha devuelto las…», de descartadas ni recuento
+- **THEN** solo se ve «El servidor ha dado una respuesta inesperada» con «Reintentar», sin aviso de «Hay N gasolineras en este radio…», de descartadas ni recuento
 
 #### Scenario: El aviso anterior desaparece
-- **WHEN** se veía «La API ha devuelto las 100 más baratas de 342…» y la búsqueda siguiente tiene `total` 3 y 3 estaciones, o `total` 0, o da un error
+- **WHEN** se veía «Hay 342 gasolineras en este radio; se han pedido las 100 más baratas…» y la búsqueda siguiente tiene `total` 3 y 3 estaciones, o `total` 0, o da un error
 - **THEN** ya no se ve ese aviso
 
 ### Requirement: Formato de precios y distancias
@@ -550,6 +558,16 @@ interpretado como HTML ni como código.
 - **WHEN** `/api/fuels` responde 503 `sin_capturas` con el mensaje `<b>sin datos</b>`
 - **THEN** el mensaje se ve con las etiquetas escritas, sin negrita
 
+### Requirement: Textos de la página sin la palabra API
+Los textos propios de la página que ve el usuario (mensajes, avisos,
+botones, etiquetas y leyenda) SHALL estar en español claro y MUST NOT usar
+la palabra «API»; para referirse al servicio dicen «el servidor». Solo el
+detalle que llega del servidor tras «Detalle:» se muestra tal cual.
+
+#### Scenario: Recorrido por todos los estados
+- **WHEN** se recorren los estados de los escenarios de esta spec (resultados, sin resultados, fuera de España, ocupado, sin datos, caído, respuesta inesperada, datos desactualizados) y se recoge el texto visible propio de la página, sin los datos de las gasolineras ni lo que sigue a «Detalle:»
+- **THEN** en ningún caso aparece la palabra «API», en mayúsculas o minúsculas
+
 ### Requirement: Accesibilidad básica
 La página SHALL poder usarse con teclado y lector de pantalla: selectores con
 etiqueta visible, lista y botones manejables con el teclado, avisos y
@@ -616,14 +634,14 @@ otro estado, o si la salud falla, no muestra ese aviso ni bloquea la página.
 
 ### Requirement: API o base ocupadas
 Si `/api/fuels` o `/api/stations/nearby` responde 503 `api_ocupada`,
-`base_ocupada` o `consulta_demasiado_larga`, la página SHALL decir «La API
-está ocupada; inténtalo en unos segundos» y ofrecer «Reintentar»,
+`base_ocupada` o `consulta_demasiado_larga`, la página SHALL decir «El
+servidor está ocupado; inténtalo en unos segundos» y ofrecer «Reintentar»,
 desactivado hasta que pasen los segundos de `Retry-After` (5 si falta o no
 es un entero de 1 a 60).
 
 #### Scenario: Base ocupada con Retry-After
 - **WHEN** `/api/stations/nearby` responde 503 `base_ocupada` con `Retry-After: 5`
-- **THEN** se ve «La API está ocupada; inténtalo en unos segundos», «Reintentar» está desactivado durante 5 s (con un margen de 0,5 s) y después se activa; no se repite la petición sola
+- **THEN** se ve «El servidor está ocupado; inténtalo en unos segundos», «Reintentar» está desactivado durante 5 s (con un margen de 0,5 s) y después se activa; no se repite la petición sola
 
 #### Scenario: Reintentar
 - **WHEN** tras el 503 anterior se activa y se pulsa «Reintentar», y esta vez la respuesta es 200
@@ -635,7 +653,7 @@ es un entero de 1 a 60).
 
 #### Scenario: Consulta demasiado larga
 - **WHEN** `/api/stations/nearby` responde 503 `consulta_demasiado_larga` sin `Retry-After`
-- **THEN** se ve «La API está ocupada; inténtalo en unos segundos» y «Reintentar» está desactivado durante 5 s
+- **THEN** se ve «El servidor está ocupado; inténtalo en unos segundos» y «Reintentar» está desactivado durante 5 s
 
 #### Scenario: Retry-After raro
 - **WHEN** la respuesta 503 `base_ocupada` no tiene `Retry-After`, o tiene `0`, `abc`, `3600` o una fecha
@@ -644,12 +662,12 @@ es un entero de 1 a 60).
 ### Requirement: Sin datos en la base
 Con cualquier otro 503 en JSON (`sin_base`, `sin_capturas`, `base_ilegible`,
 `base_no_compatible`, `recogida_a_medias` u otro código), la página SHALL
-decir «No hay datos disponibles.» seguido de «Mensaje de la API: » y el
+decir «No hay datos disponibles.» seguido de «Detalle: » y el
 `message` recibido, con «Reintentar» sin retardo.
 
 #### Scenario: Base sin capturas
 - **WHEN** `/api/fuels` responde 503 `sin_capturas` con el mensaje «todavía no hay capturas guardadas»
-- **THEN** se ve «No hay datos disponibles. Mensaje de la API: todavía no hay capturas guardadas» con «Reintentar» activo
+- **THEN** se ve «No hay datos disponibles. Detalle: todavía no hay capturas guardadas» con «Reintentar» activo
 
 #### Scenario: 503 sin mensaje
 - **WHEN** `/api/fuels` responde 503 con un código desconocido y sin `error.message`
@@ -694,27 +712,27 @@ retardo), sin mostrar detalles técnicos ni dejar resultados viejos.
 
 #### Scenario: API caída al abrir
 - **WHEN** las peticiones a `/api/fuels` fallan por red
-- **THEN** se ve «No se puede conectar con la API. Comprueba que está en marcha y el túnel abierto.» con «Reintentar», y el mapa y las atribuciones siguen visibles
+- **THEN** se ve «No se puede conectar con el servidor. Comprueba que está en marcha y que el túnel está abierto.» con «Reintentar», y el mapa y las atribuciones siguen visibles
 
 #### Scenario: API que no contesta
 - **WHEN** `/api/stations/nearby` no contesta
-- **THEN** a los 15 s (con un margen de 1 s) se ve el mensaje de API caída con «Reintentar»
+- **THEN** a los 15 s (con un margen de 1 s) se ve «No se puede conectar con el servidor. Comprueba que está en marcha y que el túnel está abierto.» con «Reintentar»
 
 #### Scenario: Respuesta que no es JSON
 - **WHEN** `/api/stations/nearby` responde 502 con una página HTML
-- **THEN** se ve «La API ha dado una respuesta inesperada» con «Reintentar», sin el HTML recibido
+- **THEN** se ve «El servidor ha dado una respuesta inesperada» con «Reintentar», sin el HTML recibido
 
 #### Scenario: 503 que no es JSON
 - **WHEN** `/api/fuels` responde 503 con una página HTML de un proxy
-- **THEN** se ve «La API ha dado una respuesta inesperada» con «Reintentar», no «No hay datos disponibles»
+- **THEN** se ve «El servidor ha dado una respuesta inesperada» con «Reintentar», no «No hay datos disponibles»
 
 #### Scenario: Error interno
 - **WHEN** `/api/stations/nearby` responde 500 `error_interno`
-- **THEN** se ve «La API ha dado un error. Inténtalo más tarde.» con «Reintentar»
+- **THEN** se ve «El servidor ha dado un error. Inténtalo más tarde.» con «Reintentar»
 
 #### Scenario: Otros errores de la API
 - **WHEN** `/api/stations/nearby` responde 422 `combustible_desconocido`, o 404, 405 o 429 con un error JSON
-- **THEN** se ve «La API ha dado un error. Inténtalo más tarde.» con «Reintentar» activo, sin el mensaje ni el código de la API
+- **THEN** se ve «El servidor ha dado un error. Inténtalo más tarde.» con «Reintentar» activo, sin el mensaje ni el código de la API
 
 #### Scenario: Reintentar tras combustible desconocido
 - **WHEN** `/api/stations/nearby` respondió 422 `combustible_desconocido` y se pulsa «Reintentar»
@@ -739,7 +757,7 @@ lista va al lado del mapa. Los controles se pueden pulsar con el dedo.
 
 #### Scenario: Controles táctiles
 - **WHEN** se abre la página en una ventana de 320×568
-- **THEN** los selectores, los botones y cada fila de la lista miden al menos 44 px de alto
+- **THEN** los selectores, los botones (también los de acercar y alejar del mapa) y cada fila de la lista miden al menos 44 px de alto
 
 ### Requirement: Pruebas sin servicios externos
 Los tests de la página SHALL ejecutarse en Chromium con la ubicación

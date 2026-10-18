@@ -87,11 +87,20 @@ API real lo hacen con una base de prueba temporal, nunca con `./data`.
 - **Código nuevo**: `web/` (HTML, CSS, JavaScript, favicon y
   `web/vendor/leaflet/` con su licencia y versión).
 - **Código modificado**: `src/api/app.py` (servir `web/` en `/`),
-  `Dockerfile` (copiar `web/`), README.
+  `Dockerfile` (copiar `web/`), `requirements-dev.txt` (Playwright),
+  `pyproject.toml` (marcador `browser`), README.
 - **API**: sin cambios en `/api/*`; `GET /` pasa de 404 a 200.
-- **Dependencias**: Leaflet (aprobada) y `pytest-playwright` en
-  `requirements-dev.txt` (aprobada), solo con Chromium; `playwright install
-  chromium` descarga el navegador una vez.
+- **Dependencias**: Leaflet (aprobada) y `pytest-playwright` (aprobada),
+  solo en `requirements-dev.txt`, nunca en la imagen: `pytest-playwright
+  0.10.0`, `playwright 1.64.0`, `greenlet 3.5.6`, `pyee 14.0.0`,
+  `python-slugify 9.1.3` y `text-unidecode 1.3`. `playwright install
+  chromium` descarga el navegador una vez (ya hecho en el Mac).
+- **Tests de Docker existentes**: `tests/docker/helpers.py` (`BUILD_FILES`),
+  `tests/docker/test_image.py` y `tests/docker/test_build_context.py` pasan
+  a incluir `web/` en la imagen, y siguen comprobando que no entra nada más.
+  En `tests/functional/test_api_format.py::test_unknown_route` el caso `"/"`
+  pasa a `"/precios"`, porque `/` ahora sirve la página. Los dos cambios
+  están autorizados por el usuario.
 - **Tests**: Playwright en Chromium. Los casos normales, contra la API real
   de la app con una base SQLite de prueba; los errores difíciles de provocar,
   con respuestas fijas guardadas en `tests/fixtures/`. Ubicación simulada y
@@ -131,30 +140,33 @@ API real lo hacen con una base de prueba temporal, nunca con `./data`.
 15. Mientras se espera la ubicación se ve España con «Buscando tu
     ubicación…» y ya se puede pinchar; si se pincha antes, gana el punto.
 16. «Volver a mi ubicación» no aparece si la ubicación está fuera de España.
-17. Otros errores JSON de la API (422, 404, 405…): «La API ha dado un error.
+17. Otros errores JSON de la API (422, 404, 405…): «El servidor ha dado un error.
     Inténtalo más tarde.» con «Reintentar».
 18. HEAD: lo admiten la página y sus archivos (`Allow: GET, HEAD`); en
     `/api/*` sigue dando 405 con `Allow: GET`.
 19. Estaciones descartadas por datos incompletos: aviso propio («1 gasolinera
-    no se muestra por datos incompletos»); «La API ha devuelto las N más
-    baratas de T» solo cuando la API devuelve menos de las que hay.
+    no se muestra por datos incompletos.»); «Hay T gasolineras en este radio; se han pedido las N
+    más baratas» solo cuando la API devuelve menos de las que hay.
 20. «Reintentar» tras un 422 `combustible_desconocido` vuelve a pedir
     `/api/fuels` y después busca.
 21. Leyenda: «Más barata», «Intermedia» y «Más cara», con el texto «Colores
     por tercios de las N gasolineras mostradas; el precio mínimo y el máximo
     siempre en sus extremos».
+22. En los textos que ve el usuario no aparece la palabra «API»: se dice «el
+    servidor». Aviso de más: «Hay 342 gasolineras en este radio; se han
+    pedido las 100 más baratas.»
+
+23. Pinchar fuera de España mientras se espera la ubicación: gana el
+    pinchazo aunque diera 422; la ubicación que llegue solo hace aparecer
+    «Volver a mi ubicación».
+24. `GET /api/fuels/` sigue redirigiendo (307) a `/api/fuels`, como hoy.
+25. Los botones de acercar y alejar del mapa miden 44 px.
+26. Al cambiar solo el radio se conserva el combustible guardado.
 
 ## Pendiente para design.md
 
-Detalles de implementación que no cambian la spec; se resolverán en
-design.md cuando se confirme la spec:
-
-- Qué responden `HEAD` y `POST` sobre un archivo de la web que no existe.
-- Cómo distinguir `Allow: GET, HEAD` en la web de `Allow: GET` en `/api/*`, y
-  cómo evitar que el montaje de la web en `/` capture peticiones de `/api/`.
-- Adónde va el foco cuando la ficha se cierra por una búsqueda nueva.
-- Si se guarda en el navegador el combustible que se elige por defecto tras
-  un 422 `combustible_desconocido`.
-- Caso raro aceptado tal cual: pinchar fuera de España mientras se espera la
-  ubicación y que después llegue; solo aparece «Volver a mi ubicación» junto
-  al mensaje de fuera de España.
+Resuelto en design.md («Pendientes resueltos»): HEAD y POST sobre archivos
+inexistentes, `Allow` en la web y en `/api/`, foco al cerrar la ficha por
+una búsqueda nueva y combustible por defecto tras `combustible_desconocido`.
+El caso de pinchar fuera de España mientras se espera la ubicación quedó
+decidido en la decisión 23.

@@ -242,4 +242,7 @@ script (aprobado el 2026-10-16).
 |-------|-----------|
 | 2026-10-17 10:30 | ✓ Carga (`RunAtLoad`): `plutil -lint` OK, `launchctl bootstrap` código 0; `launchctl print`: `runs = 1`, `last exit code = 0`. Log: `copias nuevas: 0`, `la más reciente del VPS: prices-2026-10-17.db.gz (ya estaba en el Mac)`. |
 | 2026-10-17 | ✓ Al pegar el `.plist` en zsh con oh-my-zsh se coló la contrabarra en el `DOCTYPE` (`grep -c '\\'` → 1, aunque `plutil -lint` daba OK). Quitada con `sed`: `grep` → 0, `plutil -lint` OK, recargado con `launchctl bootout` y `bootstrap` (código 0). |
-| 2026-10-18 10:00 | pendiente, **posterior al archivo**: ejecución por `StartCalendarInterval`; el log debe mostrar `copias nuevas: 1 (prices-2026-10-18.db.gz)` (la copia de las 04:43 del VPS). |
+| 2026-10-18 10:00 | ✓ Verificación posterior al archivo: launchd ejecutó la descarga por `StartCalendarInterval`. Log: `copias nuevas: 2 (prices-2026-10-17.db.gz, prices-2026-10-18.db.gz)` y `la más reciente del VPS: prices-2026-10-18.db.gz (15 capturas, verificada ahora)`. En `~/Backups/precios-gasolineras/`: `prices-2026-10-17.db.gz` (12.415.389 bytes) y `prices-2026-10-18.db.gz` (14.217.081 bytes, la copia de las 04:43 del VPS). |
+| 2026-10-18 10:00 | ✓ Se esperaba `copias nuevas: 1`; fueron 2 porque la del 17 había cambiado en el VPS: a las 18:14 la sustituyó la copia manual del runbook (antes del `git pull` de la API) y pasó de 11.513.414 a 12.415.389 bytes. El Mac la verificó y sustituyó la anterior, como pide la decisión 6. |
+| 2026-10-25 | pendiente: cambio al horario de invierno. |
+| 2027-03-28 | pendiente: cambio al horario de verano. |
