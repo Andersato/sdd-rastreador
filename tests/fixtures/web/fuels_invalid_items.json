@@ -1,0 +1,40 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": [
+   {
+    "name": "Sin slug",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 5
+   },
+   {
+    "name": "Gasoleo A",
+    "slug": "gasoleo-a",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 3
+   },
+   {
+    "name": "Sin unidad",
+    "slug": "sin-unidad",
+    "unit": null,
+    "kind": "combustible",
+    "stations": 2
+   },
+   {
+    "name": "Recuento en texto",
+    "slug": "recuento-texto",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": "4"
+   }
+  ],
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

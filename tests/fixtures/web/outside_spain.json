@@ -1,0 +1,11 @@
+{
+ "status": 422,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "error": {
+   "code": "fuera_de_espana",
+   "message": "el punto de búsqueda está fuera de las zonas de España"
+  }
+ }
+}

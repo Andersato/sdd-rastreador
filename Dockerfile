@@ -38,6 +38,8 @@ RUN pip install --no-cache-dir --no-deps --root-user-action=ignore -r /tmp/requi
 WORKDIR /app
 COPY src/ /app/src/
 COPY container/ /app/container/
+# Página web del mapa, servida por la API en / (add-map-view).
+COPY web/ /app/web/
 
 USER 10001:10001
 ENTRYPOINT ["python", "/app/container/entrypoint.py"]

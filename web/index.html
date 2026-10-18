@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gasolineras baratas cerca</title>
+<link rel="icon" href="favicon.ico">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<h1 class="visually-hidden">Gasolineras baratas cerca</h1>
+<div id="map" class="map" role="region" aria-label="Mapa de gasolineras"></div>
+
+<section id="panel" class="panel" aria-label="Búsqueda y lista de gasolineras">
+  <div class="panel-head">
+    <form class="controls" id="controls">
+      <div class="field">
+        <label for="fuel">Combustible</label>
+        <select id="fuel" name="fuel" disabled></select>
+      </div>
+      <div class="field field-radius">
+        <label for="radius">Radio</label>
+        <select id="radius" name="radius">
+          <option value="5">5 km</option>
+          <option value="10" selected>10 km</option>
+          <option value="25">25 km</option>
+          <option value="50">50 km</option>
+        </select>
+      </div>
+      <button type="button" id="back-to-location" class="back" hidden>Volver a mi ubicación</button>
+    </form>
+    <p id="stale" class="stale" role="status" hidden></p>
+    <div id="status" class="status" aria-live="polite" tabindex="-1">
+      <p id="hint" class="hint" hidden></p>
+      <p id="message" class="message" hidden></p>
+      <div class="summary">
+        <p id="count" class="count" hidden></p>
+        <button type="button" id="toggle" class="toggle" aria-expanded="false"
+                aria-controls="panel-body" hidden>Ver lista</button>
+      </div>
+    </div>
+    <button type="button" id="retry" class="retry" hidden>Reintentar</button>
+    <button type="button" id="cheapest" class="cheapest" hidden></button>
+  </div>
+  <div id="panel-body" class="panel-body">
+    <p id="capture" class="capture" hidden></p>
+    <p id="more" class="note" hidden></p>
+    <p id="discarded" class="note" hidden></p>
+    <div id="legend" class="legend" hidden>
+      <p id="legend-explain"></p>
+      <ul id="legend-tiers" class="legend-tiers">
+        <li><span class="swatch tier-cheap" aria-hidden="true"></span>Más barata</li>
+        <li><span class="swatch tier-mid" aria-hidden="true"></span>Intermedia</li>
+        <li><span class="swatch tier-expensive" aria-hidden="true"></span>Más cara</li>
+      </ul>
+      <p id="legend-range"></p>
+    </div>
+    <ol id="list" class="list" aria-label="Gasolineras por precio"></ol>
+  </div>
+</section>
+
+<section id="detail" class="detail" aria-label="Ficha de la gasolinera" hidden>
+  <div id="detail-body" class="detail-body"></div>
+  <div class="detail-actions">
+    <button type="button" id="detail-close" class="detail-close">Cerrar</button>
+  </div>
+</section>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

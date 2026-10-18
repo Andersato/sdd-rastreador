@@ -1,0 +1,52 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "fuel": {
+    "name": "Gasoleo A",
+    "slug": "gasoleo-a",
+    "unit": "€/l",
+    "kind": "combustible"
+   },
+   "center": {
+    "lat": 41.387,
+    "lon": 2.169
+   },
+   "radius_km": 10,
+   "limit": 100,
+   "total": 2,
+   "stations": [
+    {
+     "id": "8001",
+     "brand": "PLENOIL",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Barcelona",
+     "province": "BARCELONA",
+     "latitude": 41.39,
+     "longitude": 2.17,
+     "price": 1.419,
+     "unit": "€/l",
+     "distance_km": 0.6
+    },
+    {
+     "id": "8002",
+     "brand": "BONAREA",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Barcelona",
+     "province": "BARCELONA",
+     "latitude": 41.38,
+     "longitude": 2.16,
+     "price": 1.439,
+     "unit": "€/l",
+     "distance_km": 1.1
+    }
+   ]
+  },
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

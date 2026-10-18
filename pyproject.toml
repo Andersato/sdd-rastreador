@@ -9,4 +9,5 @@ testpaths = ["tests"]
 pythonpath = ["."]
 markers = [
     "docker: tests que construyen la imagen y lanzan contenedores (se saltan si Docker no está disponible)",
+    "browser: tests de la web en el Chromium de Playwright (se saltan si Chromium no está instalado)",
 ]

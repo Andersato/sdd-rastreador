@@ -1,0 +1,76 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "fuel": {
+    "name": "Gasoleo A",
+    "slug": "gasoleo-a",
+    "unit": "€/l",
+    "kind": "combustible"
+   },
+   "center": {
+    "lat": 40.417,
+    "lon": -3.704
+   },
+   "radius_km": 10,
+   "limit": 100,
+   "total": 4,
+   "stations": [
+    {
+     "id": "1004",
+     "brand": "BP",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Madrid",
+     "province": "MADRID",
+     "latitude": 40.463,
+     "longitude": -3.7038,
+     "price": 1.299,
+     "unit": "€/l",
+     "distance_km": 5.14
+    },
+    {
+     "id": "1003",
+     "brand": "CEPSA",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Madrid",
+     "province": "MADRID",
+     "latitude": 40.44,
+     "longitude": -3.73,
+     "price": 1.399,
+     "unit": "€/l",
+     "distance_km": 3.4
+    },
+    {
+     "id": "1001",
+     "brand": "REPSOL",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Madrid",
+     "province": "MADRID",
+     "latitude": 40.425,
+     "longitude": -3.7038,
+     "price": 1.459,
+     "unit": "€/l",
+     "distance_km": 0.91
+    },
+    {
+     "id": "1002",
+     "brand": "GALP",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Madrid",
+     "province": "MADRID",
+     "latitude": 40.4168,
+     "longitude": -3.68,
+     "price": 1.459,
+     "unit": "€/l",
+     "distance_km": 2.01
+    }
+   ]
+  },
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

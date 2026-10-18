@@ -1,0 +1,5 @@
+{
+ "status": 503,
+ "headers": {},
+ "body_text": "<!doctype html><html><body><h1>Bad Gateway</h1><p>nginx proxy</p></body></html>"
+}

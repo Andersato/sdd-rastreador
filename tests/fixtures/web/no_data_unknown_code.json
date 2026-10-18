@@ -1,0 +1,10 @@
+{
+ "status": 503,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "error": {
+   "code": "codigo_raro"
+  }
+ }
+}

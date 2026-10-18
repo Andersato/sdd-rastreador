@@ -26,11 +26,21 @@ vistazo dónde está la gasolinera más barata cerca de él.
 - Marcadores con el precio en texto, coloreados por tercios de las
   gasolineras mostradas (el tercio más barato, el del medio y el más caro),
   con leyenda.
-- Lista ordenada por precio (lateral en escritorio, debajo del mapa en el
-  móvil) sincronizada con el mapa: pulsar en una resalta la otra.
+- **Mobile first**: el diseño base es el de móvil (320–430 px) y el de
+  escritorio se añade con media queries `min-width`. En el móvil el mapa
+  ocupa toda la pantalla y la lista va en una hoja inferior desplegable
+  (plegada: controles, pista, mensaje o error, aviso de desactualizados,
+  recuento y la más barata; desplegada: además la captura, «Hay N…», las
+  descartadas, la leyenda y la lista completa). En
+  escritorio, panel lateral. Controles al alcance del pulgar, objetivos
+  táctiles de 44 px, nada depende de hover, vertical y horizontal, alturas en
+  `dvh`, zonas seguras de iOS y un presupuesto de peso de 300 KB.
+- Lista ordenada por precio sincronizada con el mapa: pulsar en una resalta
+  la otra.
 - Ficha sencilla con lo que ya trae la búsqueda: rótulo, dirección,
-  municipio, precio y distancia. Se cierra con un botón y con Escape. No hace
-  peticiones extra.
+  municipio, precio y distancia; en el móvil, una hoja inferior (nunca un
+  globo sobre el mapa); en escritorio, en el panel lateral. Se cierra con un
+  botón y con Escape. No hace peticiones extra.
 - Fecha y hora (de Madrid) de la captura de los precios, y aviso si
   `/api/health` dice que los datos están desactualizados.
 - Atribución visible al Ministerio y a OpenStreetMap; teselas de
@@ -38,8 +48,7 @@ vistazo dónde está la gasolinera más barata cerca de él.
 - Mensajes claros para: API o base ocupadas (503 con `Retry-After`), sin
   datos en la base, sin resultados en el radio, punto fuera de España, API
   caída o respuesta inesperada.
-- Diseño adaptado al móvil (desde 320 px de ancho, sin scroll horizontal) y
-  accesibilidad básica (teclado, lectores de pantalla, contraste).
+- Accesibilidad básica (teclado, lectores de pantalla, contraste).
 - Leaflet (dependencia nueva ya aprobada) con versión fija, copiado en el
   repo con su licencia; nunca desde una CDN.
 - La raíz `/` deja de responder 404: ahora sirve la página. Las rutas de
@@ -66,7 +75,11 @@ API real lo hacen con una base de prueba temporal, nunca con `./data`.
 - Vista inicial con Canarias, Ceuta y Melilla: muestra Península y Baleares;
   se llega a las demás moviendo el mapa.
 - Agrupar marcadores que se solapan cuando hay muchos.
-- Probar en navegadores distintos de Chromium.
+- Probar en Firefox o en un iPhone real en los tests automáticos: el iPhone
+  se emula en WebKit (el motor de Safari) y el Android en Chromium. Probar en
+  el Simulador de iOS de Xcode es una verificación manual opcional.
+- **Mejora prevista** (para «Qué no hace todavía»): arrastrar la hoja
+  inferior con el dedo. Por ahora se despliega y se pliega con su botón.
 - Funcionar sin conexión a internet (las teselas vienen de OpenStreetMap).
 
 ## Capabilities
@@ -101,7 +114,12 @@ API real lo hacen con una base de prueba temporal, nunca con `./data`.
   En `tests/functional/test_api_format.py::test_unknown_route` el caso `"/"`
   pasa a `"/precios"`, porque `/` ahora sirve la página. Los dos cambios
   están autorizados por el usuario.
-- **Tests**: Playwright en Chromium. Los casos normales, contra la API real
+- **Normas del proyecto**: `CLAUDE.md` y `openspec/config.yaml` pasan a pedir
+  que toda interfaz sea mobile first con estos mismos criterios (pedido por
+  el usuario).
+- **Tests**: Playwright, sobre todo con emulación móvil táctil: iPhone en
+  WebKit y Android en Chromium; una parte en escritorio en Chromium. WebKit
+  ya instalado por el usuario (`playwright install webkit`). Los casos normales, contra la API real
   de la app con una base SQLite de prueba; los errores difíciles de provocar,
   con respuestas fijas guardadas en `tests/fixtures/`. Ubicación simulada y
   teselas bloqueadas. Unitarios de colores, orden y formato, ejecutados en el
@@ -115,8 +133,8 @@ API real lo hacen con una base de prueba temporal, nunca con `./data`.
 
 1. Se divide: la ficha queda sencilla, con los datos de la búsqueda; horario
    y «Cómo llegar» pasan a `add-station-detail`.
-2. `pytest-playwright`, solo Chromium; los unitarios de JavaScript se
-   ejecutan en su navegador.
+2. `pytest-playwright`, con Chromium y WebKit (decisión 31); los unitarios
+   de JavaScript se ejecutan en su navegador.
 3. La ubicación se pide al abrir, con botón «Volver a mi ubicación». Si
    llega pasados los 10 s y el usuario aún no ha pinchado, se usa.
 4. Coordenadas enviadas con 3 decimales, por privacidad.
@@ -162,6 +180,36 @@ API real lo hacen con una base de prueba temporal, nunca con `./data`.
 24. `GET /api/fuels/` sigue redirigiendo (307) a `/api/fuels`, como hoy.
 25. Los botones de acercar y alejar del mapa miden 44 px.
 26. Al cambiar solo el radio se conserva el combustible guardado.
+
+27. Mobile first (cambio de requisito del usuario): CSS base de móvil y
+    escritorio con `min-width` desde 1024 px; mapa a pantalla completa con
+    hoja inferior de la lista en el móvil y panel lateral en escritorio;
+    ficha en hoja inferior en el móvil y en el panel en escritorio, nunca en
+    un globo sobre el mapa.
+28. En el móvil, los controles, los avisos, el recuento y la más barata van
+    en la hoja plegada; la captura, la leyenda, los avisos de descartadas y
+    de «Hay N gasolineras…» y la lista, en la hoja desplegada (como mucho el
+    70 % del alto).
+29. Las dos atribuciones van en una sola caja arriba del mapa, que ninguna
+    hoja tapa.
+30. Presupuesto de peso: 300 KB sin contar teselas ni respuestas de la API.
+31. Dispositivos de los tests, con las ventanas de Playwright: iPhone 13 en
+    WebKit (390×664 y 750×342) por defecto, Pixel 7 en Chromium (412×839)
+    para lo común, 320×568 táctil en Chromium para el tamaño mínimo y
+    escritorio en Chromium (1280×800) para panel, teclado y desplazamiento
+    de la lista.
+32. Fuera de los 44 px solo quedan los marcadores de precio (su vía
+    accesible es la lista) y los enlaces dentro de un texto.
+33. La zona visible del mapa no descuenta el zoom; a 320×568 debe ser al
+    menos el 40 % del alto, con la hoja plegada compacta.
+34. La hoja sigue desplegada entre búsquedas mientras haya lista; si una se
+    queda sin lista, se pliega.
+35. La ficha en el móvil mide como mucho el 70 % del alto, con «Cerrar»
+    siempre a la vista.
+36. Al cerrar una ficha abierta desde «Más barata», el foco vuelve a ese
+    botón.
+37. Verificación manual opcional en el Simulador de iOS de Xcode, con los
+    pasos en el README; no bloquea el archivo.
 
 ## Pendiente para design.md
 

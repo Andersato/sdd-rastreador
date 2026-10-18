@@ -1,7 +1,9 @@
 """Configuración común de los tests.
 
 Ningún test puede salir a la red: solo se permiten conexiones a la propia
-máquina (el servidor HTTP local de `tests/http_server.py`).
+máquina (el servidor HTTP local de `tests/http_server.py`). El navegador de
+los tests de la web es otro proceso: lo vigila su propia guarda de red
+(`tests/web_fixtures.py`).
 """
 
 import socket
@@ -9,6 +11,9 @@ import socket
 import pytest
 
 from tests.helpers import PROXY_VARS
+
+# Fixtures de los tests de la web en Chromium (servidor, guarda de red…).
+pytest_plugins = ["tests.web_fixtures"]
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1"}
 

@@ -17,6 +17,16 @@ context: |
   Atribución obligatoria: "Ministerio de Industria, Comercio y Turismo -
   Precios de carburantes en estaciones de servicio".
   Idioma: specs y documentación en español; código y nombres en inglés.
+  Interfaz mobile first: CSS base para móvil (320–430 px) y escritorio con
+  media queries min-width, nunca max-width; en móvil el mapa a pantalla
+  completa, con listas y fichas en hojas inferiores, y en escritorio panel
+  lateral; controles al alcance del pulgar y objetivos táctiles de 44 px
+  (salvo marcadores con otra vía accesible y enlaces dentro de un texto);
+  nada depende de hover; vertical y horizontal; alturas en dvh (no 100vh),
+  safe-area-inset de iOS y meta viewport con viewport-fit=cover; presupuesto
+  de peso para datos móviles y sin fuentes externas; tests de Playwright
+  sobre todo con emulación de un iPhone (en WebKit) y un Android (en
+  Chromium) táctiles y al menos uno de escritorio.
 
 rules:
   proposal:
@@ -24,6 +34,8 @@ rules:
     - Indica explícitamente qué queda fuera del alcance.
     - Si el cambio afecta a datos ya guardados, indícalo y explica cómo se
       preservan.
+    - Si el cambio tiene interfaz, descríbela mobile first (móvil primero,
+      escritorio como mejora) y fija su presupuesto de peso.
   specs:
     - Cada requisito debe tener al menos un escenario WHEN/THEN verificable.
     - Incluye escenarios de error y casos límite, no solo el caso feliz.
@@ -31,6 +43,10 @@ rules:
       escenarios.
     - Cubre los fallos de la fuente de datos (API caída, respuesta vacía o
       incompleta, campos con formato inesperado).
+    - Si hay interfaz, incluye escenarios mobile first con tamaños de móvil
+      (320–430 px) en vertical y horizontal y uno de escritorio, objetivos
+      táctiles de 44 px, controles al alcance del pulgar, sin hover, dvh,
+      safe-area-inset, meta viewport y presupuesto de peso.
   design:
     - Si el cambio modifica el modelo de datos, describe la migración y cómo
       se conserva el histórico existente.

@@ -103,13 +103,14 @@ cabecera `Referer` con el origen de la página.
 - **THEN** no tiene ningún service worker registrado ni nada en Cache Storage
 
 ### Requirement: Atribuciones visibles
-La página SHALL mostrar siempre, sin desplegar nada, el texto «Ministerio de
-Industria, Comercio y Turismo - Precios de carburantes en estaciones de
-servicio» y «© OpenStreetMap contributors» con un enlace a
-`https://www.openstreetmap.org/copyright`, también si la API falla.
+La página SHALL mostrar siempre, sin desplegar nada y sin que las tapen las
+hojas inferiores, el texto «Ministerio de Industria, Comercio y Turismo -
+Precios de carburantes en estaciones de servicio» y «© OpenStreetMap
+contributors» con un enlace a `https://www.openstreetmap.org/copyright`,
+también si la API falla.
 
 #### Scenario: Atribuciones con datos
-- **WHEN** se abre la página y la búsqueda muestra gasolineras
+- **WHEN** se abre la página en un iPhone (390×664) y la búsqueda muestra gasolineras
 - **THEN** se ven el texto exacto del Ministerio y «© OpenStreetMap contributors» enlazado a `https://www.openstreetmap.org/copyright`
 
 #### Scenario: Atribuciones con la API caída
@@ -117,8 +118,8 @@ servicio» y «© OpenStreetMap contributors» con un enlace a
 - **THEN** las dos atribuciones siguen visibles
 
 #### Scenario: Atribuciones en el móvil
-- **WHEN** se abre la página en una ventana de 320×568
-- **THEN** las dos atribuciones se ven enteras, sin cortarse ni tapar los controles del mapa
+- **WHEN** se abre la página en una ventana de 320×568, con la hoja de la lista desplegada o con una ficha abierta
+- **THEN** las dos atribuciones se ven enteras, sin cortarse ni tapar los controles del mapa, y ninguna hoja las tapa
 
 ### Requirement: Coordenadas enviadas con 3 decimales
 La página SHALL enviar a la API la latitud y la longitud del punto de
@@ -488,14 +489,19 @@ juntas. Con un solo precio, todas son «precio único».
 - **THEN** es «precio único» y la leyenda dice «Todas a 1,399 €/l»
 
 ### Requirement: Marcadores con el precio en texto y leyenda
-Cada marcador SHALL mostrar el precio en texto con el color de su tercio,
-y una leyenda visible SHALL explicar los colores (tercios de las mostradas,
-con el precio mínimo y el máximo siempre en sus extremos) y dar el precio
-más bajo y el más alto, de modo que el color nunca sea la única pista.
+Cada marcador SHALL mostrar el precio en texto con el color de su tercio, y
+una leyenda SHALL explicar los colores (tercios de las mostradas, con el
+precio mínimo y el máximo siempre en sus extremos) y dar el precio más bajo
+y el más alto, de modo que el color nunca sea la única pista. En el
+escritorio se ve siempre; en el móvil, al desplegar la hoja de la lista.
 
 #### Scenario: Marcadores y leyenda
 - **WHEN** se muestran 4 gasolineras de Gasoleo A a 1.299, 1.399, 1.459 y 1.459
 - **THEN** cada marcador muestra su precio («1,299», «1,399», «1,459», «1,459»), y la leyenda muestra los tres colores con «Más barata», «Intermedia» y «Más cara», el texto «Colores por tercios de las 4 gasolineras mostradas; el precio mínimo y el máximo siempre en sus extremos» y «De 1,299 a 1,459 €/l»
+
+#### Scenario: Leyenda en el móvil
+- **WHEN** en un iPhone se muestran esas 4 gasolineras con la hoja plegada, y después se despliega
+- **THEN** plegada no se ve la leyenda y cada marcador sigue mostrando su precio; desplegada, la leyenda se ve completa
 
 #### Scenario: Sin color
 - **WHEN** se ve la página en escala de grises
@@ -504,16 +510,20 @@ más bajo y el más alto, de modo que el color nunca sea la única pista.
 ### Requirement: Lista y mapa sincronizados
 Pulsar una gasolinera de la lista SHALL resaltarla en la lista y en el mapa,
 mover el mapa si no se ve y abrir su ficha. Pulsar su marcador SHALL
-resaltarla igual, abrir su ficha y desplazar la lista hasta ella. Solo hay
-una resaltada a la vez.
+resaltarla igual y abrir su ficha; en el escritorio, además, desplaza la
+lista hasta ella. Solo hay una resaltada a la vez.
 
 #### Scenario: Pulsar en la lista
-- **WHEN** se pulsa «REPSOL · 0,9 km · 1,459 €/l» en la lista
-- **THEN** esa fila y el marcador de "1001" quedan resaltados, el marcador queda dentro del mapa visible y se abre su ficha
+- **WHEN** en un iPhone se despliega la lista y se toca «REPSOL · 0,9 km · 1,459 €/l»
+- **THEN** esa fila y el marcador de "1001" quedan resaltados, el marcador queda en la zona visible del mapa y se abre su ficha
 
-#### Scenario: Pulsar un marcador
-- **WHEN** hay 40 gasolineras en la lista, la última no se ve, y se pulsa su marcador
+#### Scenario: Pulsar un marcador en el escritorio
+- **WHEN** en una ventana de 1280×800 hay 40 gasolineras en la lista, la última no se ve, y se pulsa su marcador
 - **THEN** la lista se desplaza hasta que su fila se ve, esa fila y el marcador quedan resaltados y se abre su ficha
+
+#### Scenario: Tocar un marcador en el móvil
+- **WHEN** en un iPhone, con la lista plegada, se toca el marcador de "1002"
+- **THEN** se abre su ficha, el marcador queda resaltado y su fila queda marcada como resaltada en la lista
 
 #### Scenario: Cambiar de seleccionada
 - **WHEN** "1001" está resaltada y se pulsa "1002"
@@ -524,14 +534,27 @@ una resaltada a la vez.
 - **THEN** en cada caso no queda ninguna resaltada y la ficha se cierra
 
 ### Requirement: Ficha sencilla de la gasolinera
-La ficha SHALL mostrar el rótulo, la dirección, el municipio, el precio con
-la unidad del combustible elegido y la distancia, todo de la respuesta de
-cercanas, sin hacer peticiones. Se cierra con su botón «Cerrar» o con
-Escape, y al cerrarla no queda ninguna gasolinera resaltada.
+La ficha SHALL mostrar rótulo, dirección, municipio, precio y distancia de la
+respuesta de cercanas, sin hacer peticiones. En el móvil es una hoja inferior
+en el sitio de la de la lista, nunca un globo sobre el mapa, de como mucho el
+70 % del alto, con «Cerrar» siempre a la vista; en el escritorio, va en el
+panel lateral. Se cierra con «Cerrar» o Escape, sin dejar ninguna resaltada.
 
 #### Scenario: Ficha completa
 - **WHEN** se pulsa "4375" (REPSOL, CALLE MAYOR, 1, Madrid) con Gasoleo A a 1.459 a 0.04 km
 - **THEN** la ficha muestra «REPSOL», «CALLE MAYOR, 1», «Madrid», «1,459 €/l» y «0,0 km», y no se hace ninguna petición
+
+#### Scenario: Ficha en una hoja inferior en el móvil
+- **WHEN** en un iPhone (390×664) se toca el marcador de "4375"
+- **THEN** la ficha aparece pegada al borde inferior de la pantalla, a todo el ancho, en lugar de la hoja de la lista; no hay ningún globo sobre el mapa, y el marcador de "4375" queda en la zona visible del mapa, por encima de la ficha
+
+#### Scenario: Ficha con textos largos en horizontal
+- **WHEN** en un iPhone en horizontal (750×342) se abre la ficha de una gasolinera con un rótulo de 80 caracteres y una dirección de 120
+- **THEN** la ficha mide como mucho el 70 % del alto de la ventana, su contenido se desplaza dentro de ella y «Cerrar» se ve entero sin desplazar nada
+
+#### Scenario: Ficha en el panel lateral en el escritorio
+- **WHEN** en una ventana de 1280×800 se pulsa "4375"
+- **THEN** la ficha aparece en el panel lateral, encima de la lista, y no hay ningún globo sobre el mapa
 
 #### Scenario: Datos vacíos
 - **WHEN** se pulsa una gasolinera con `brand`, `address` y `municipality` `null`
@@ -539,7 +562,7 @@ Escape, y al cerrarla no queda ninguna gasolinera resaltada.
 
 #### Scenario: Cerrar con el botón
 - **WHEN** la ficha de "1001" está abierta y se pulsa «Cerrar»
-- **THEN** la ficha se cierra, ni la fila ni el marcador de "1001" quedan resaltados, y la búsqueda no cambia
+- **THEN** la ficha se cierra, ni la fila ni el marcador de "1001" quedan resaltados, la búsqueda no cambia y, en el móvil, vuelve la hoja de la lista plegada o desplegada como estaba
 
 #### Scenario: Cerrar con Escape
 - **WHEN** la ficha de "1001" está abierta y se pulsa Escape
@@ -570,25 +593,34 @@ detalle que llega del servidor tras «Detalle:» se muestra tal cual.
 
 ### Requirement: Accesibilidad básica
 La página SHALL poder usarse con teclado y lector de pantalla: selectores con
-etiqueta visible, lista y botones manejables con el teclado, avisos y
-resultados anunciados, foco que entra en la ficha al abrirla y vuelve a la
-fila al cerrarla, y texto de los marcadores con contraste de al menos 4,5:1.
+etiqueta visible, lista, botones y hoja inferior manejables con el teclado,
+avisos y resultados anunciados, foco que entra en la ficha al abrirla y
+vuelve al cerrarla, y texto de los marcadores con contraste de al menos
+4,5:1.
 
 #### Scenario: Etiquetas de los selectores
 - **WHEN** se revisan los selectores
 - **THEN** el de combustible tiene la etiqueta visible «Combustible» y el de radio «Radio», asociadas a cada uno
 
 #### Scenario: Lista con el teclado
-- **WHEN** se llega a la fila de "1001" con el tabulador y se pulsa Intro
+- **WHEN** en una ventana de 1280×800 se llega a la fila de "1001" con el tabulador y se pulsa Intro
 - **THEN** pasa lo mismo que al pulsarla, y el foco pasa a la ficha
 
+#### Scenario: Botón de la hoja inferior
+- **WHEN** en un iPhone se revisa el botón que despliega la lista
+- **THEN** dice «Ver lista» con `aria-expanded="false"` y, al pulsarlo, «Ocultar lista» con `aria-expanded="true"`, y se puede usar con el teclado
+
 #### Scenario: Foco al cerrar
-- **WHEN** la ficha se abrió desde la fila de "1001" con el teclado y se pulsa Escape
+- **WHEN** la ficha se abrió desde la fila de "1001" y se pulsa Escape
 - **THEN** la ficha se cierra y el foco vuelve a la fila de "1001"
 
 #### Scenario: Foco al cerrar una ficha abierta desde un marcador
 - **WHEN** la ficha de "1001" se abrió pulsando su marcador y se pulsa «Cerrar»
-- **THEN** el foco pasa a la fila de "1001" en la lista
+- **THEN** el foco pasa a la fila de "1001" si la lista se ve (escritorio o lista desplegada) y, si está plegada, al botón «Ver lista»
+
+#### Scenario: Foco al cerrar una ficha abierta desde la más barata
+- **WHEN** con la hoja plegada se abrió la ficha de "1003" desde «Más barata: CEPSA · 3,4 km · 1,399 €/l» y se pulsa «Cerrar»
+- **THEN** el foco vuelve al botón «Más barata: …»
 
 #### Scenario: Avisos anunciados
 - **WHEN** llega una búsqueda con 3 gasolineras, o un error, o el aviso de datos desactualizados
@@ -738,38 +770,188 @@ retardo), sin mostrar detalles técnicos ni dejar resultados viejos.
 - **WHEN** `/api/stations/nearby` respondió 422 `combustible_desconocido` y se pulsa «Reintentar»
 - **THEN** se pide una vez `/api/fuels` y, si responde bien, una vez `/api/stations/nearby` con el combustible elegido si sigue en la lista, o con el primero si no
 
-### Requirement: Diseño adaptado al móvil
-La página SHALL usarse en pantallas desde 320 px de ancho sin scroll
-horizontal, con la lista debajo del mapa; en pantallas de 1024 px o más, la
-lista va al lado del mapa. Los controles se pueden pulsar con el dedo.
+### Requirement: Diseño mobile first
+Las hojas de estilo SHALL tener como base el diseño de móvil (de 320 a 430
+px de ancho) y añadir el de escritorio con media queries `min-width`, como
+mejora progresiva; MUST NOT usar media queries `max-width`. Por debajo de
+1024 px de ancho se usa el diseño de móvil; desde 1024 px, el de escritorio.
 
-#### Scenario: Teléfonos
-- **WHEN** se abre la página con resultados en ventanas de 320×568 y 375×667
-- **THEN** el ancho del documento no pasa del de la ventana, el mapa ocupa todo el ancho y al menos la mitad del alto, y la lista está debajo
+#### Scenario: Hojas de estilo
+- **WHEN** se revisan las hojas de estilo de `web/` (sin contar la de Leaflet)
+- **THEN** todas las media queries de ancho son `min-width` y ninguna es `max-width`
+
+#### Scenario: Móvil en horizontal y tableta
+- **WHEN** se abre la página con resultados en ventanas de 750×342 (iPhone en horizontal) y de 820×1180
+- **THEN** se usa el diseño de móvil: mapa a pantalla completa y hoja inferior
 
 #### Scenario: Escritorio
 - **WHEN** se abre la página con resultados en una ventana de 1280×800
-- **THEN** la lista está a un lado del mapa y los dos se ven sin desplazar la página
+- **THEN** se usa el diseño de escritorio: panel lateral y mapa
+
+### Requirement: Mapa a pantalla completa en el móvil
+En el diseño de móvil el mapa SHALL ocupar toda la pantalla, sin scroll de
+la página, con la hoja inferior y las atribuciones encima. Los encuadres se
+hacen sobre la zona visible del mapa: la que no tapan la hoja ni la caja de
+atribuciones (los botones de zoom, estrechos y a un lado, no se descuentan).
+En esta spec, que algo «se ve entero» en el mapa quiere decir dentro de esa
+zona.
+
+#### Scenario: iPhone y Android
+- **WHEN** se abre la página con resultados en un iPhone (390×664) y en un Android (412×839)
+- **THEN** el mapa cubre la ventana entera, la página no tiene scroll vertical ni horizontal, y el círculo del radio se ve entero entre la caja de atribuciones y la hoja plegada
+
+#### Scenario: Teléfono pequeño
+- **WHEN** se abre la página con resultados en una ventana de 320×568
+- **THEN** el ancho del documento no pasa de 320 px, el mapa cubre la ventana y la zona visible del mapa ocupa al menos el 40 % de su alto con la hoja plegada
 
 #### Scenario: Textos largos en el móvil
 - **WHEN** en una ventana de 320×568 una gasolinera tiene un rótulo de 80 caracteres sin espacios
-- **THEN** no aparece scroll horizontal y el precio de esa fila se sigue viendo entero
+- **THEN** no aparece scroll horizontal, ni plegada ni desplegada, y el precio de esa fila se sigue viendo entero
 
-#### Scenario: Controles táctiles
-- **WHEN** se abre la página en una ventana de 320×568
-- **THEN** los selectores, los botones (también los de acercar y alejar del mapa) y cada fila de la lista miden al menos 44 px de alto
+### Requirement: Hoja inferior de la lista en el móvil
+En el móvil, la lista SHALL ir en una hoja inferior con un botón para
+desplegarla y plegarla. Plegada muestra los controles, la pista de
+ubicación, el mensaje o error con «Reintentar», el aviso de datos
+desactualizados, el recuento y la más barata (que abre su ficha). Desplegada
+muestra además la captura, «Hay N…», las descartadas, la leyenda y la lista,
+con su propio scroll y como mucho el 70 % del alto. En el móvil, lo que va en
+la hoja desplegada se comprueba con ella desplegada.
+
+#### Scenario: Plegada con resultados
+- **WHEN** en un iPhone la búsqueda de Madrid a 5 km muestra "1003" (CEPSA, 1.399, 3.4 km), "1001" y "1002"
+- **THEN** la hoja plegada muestra «3 gasolineras encontradas» y, en la misma fila, el botón «Ver lista», y debajo «Más barata: CEPSA · 3,4 km · 1,399 €/l»; no se ven las filas de la lista, la captura ni la leyenda
+
+#### Scenario: Desplegar
+- **WHEN** con 40 gasolineras se pulsa «Ver lista»
+- **THEN** se ven la captura, la leyenda y las filas, la hoja mide como mucho el 70 % del alto de la ventana, la lista se desplaza dentro de la hoja sin mover la página, y el botón dice «Ocultar lista»
+
+#### Scenario: Plegar
+- **WHEN** la lista está desplegada y se pulsa «Ocultar lista»
+- **THEN** la hoja vuelve a mostrar solo lo de la hoja plegada
+
+#### Scenario: Tocar la más barata
+- **WHEN** con la hoja plegada se toca «Más barata: CEPSA · 3,4 km · 1,399 €/l»
+- **THEN** se abre la ficha de "1003" y su marcador queda resaltado
+
+#### Scenario: Sin lista que mostrar
+- **WHEN** no hay punto elegido, la búsqueda no da resultados o da un error
+- **THEN** no se ven el botón «Ver lista» ni la línea de la más barata, y los avisos siguen en la hoja
+
+#### Scenario: Desplegada entre búsquedas
+- **WHEN** la lista está desplegada y se cambia el radio, y la búsqueda nueva da resultados
+- **THEN** la lista sigue desplegada, con las gasolineras nuevas
+
+#### Scenario: Se pliega al quedarse sin lista
+- **WHEN** la lista está desplegada, una búsqueda da `total` 0 o un error, y la siguiente da resultados
+- **THEN** tras la primera la hoja queda plegada, y tras la segunda sigue plegada con «Ver lista»
+
+### Requirement: Panel lateral en el escritorio
+Desde 1024 px de ancho, los controles, los avisos, la ficha, la captura, la
+leyenda y la lista SHALL ir en un panel lateral izquierdo, con su propio
+scroll, y el mapa ocupa el resto; no hay botón «Ver lista» ni línea de la
+más barata.
+
+#### Scenario: Escritorio con resultados
+- **WHEN** se abre la página con 40 gasolineras en una ventana de 1280×800
+- **THEN** el panel y el mapa están uno al lado del otro, los dos se ven sin desplazar la página, la lista se desplaza dentro del panel y no se ve «Ver lista»
+
+### Requirement: Controles al alcance del pulgar
+En el móvil, combustible, radio y «Volver a mi ubicación» SHALL estar en la
+hoja inferior, en la mitad inferior de la pantalla, visibles con la hoja
+plegada. Selectores, botones (también los de zoom) y filas de la lista miden
+al menos 44×44 px en móvil y escritorio. Solo quedan fuera los marcadores de
+precio, cuya vía accesible es la lista, y los enlaces dentro de un texto.
+
+#### Scenario: Controles en vertical
+- **WHEN** en un iPhone (390×664) y en un Android (412×839) la página muestra resultados y la ubicación concedida
+- **THEN** los selectores de combustible y radio y «Volver a mi ubicación» se ven enteros por debajo de la mitad de la pantalla
+
+#### Scenario: Controles en horizontal
+- **WHEN** en un iPhone en horizontal (750×342) la página muestra resultados
+- **THEN** esos tres controles se ven enteros por debajo de la mitad de la pantalla
+
+#### Scenario: Objetivos táctiles
+- **WHEN** se miden en una ventana de 320×568, con la hoja plegada, desplegada y con una ficha abierta, y en una de 1280×800, con y sin ficha
+- **THEN** los selectores, los botones que se ven en cada caso («Ver lista», «Ocultar lista», «Cerrar», «Reintentar», la más barata, «Volver a mi ubicación», «Acercar» y «Alejar») y cada fila de la lista miden al menos 44 px de alto y 44 px de ancho
+
+#### Scenario: Excepciones
+- **WHEN** se miden los marcadores de precio y el enlace «OpenStreetMap contributors»
+- **THEN** no se les exige 44 px, y cada gasolinera de un marcador tiene su fila en la lista, que sí los mide
+
+### Requirement: Sin depender de hover
+Ninguna función SHALL depender de pasar el puntero por encima: todo se hace
+tocando o pulsando, también con el teclado. Las reglas `:hover` de las
+hojas de estilo, si las hay, solo cambian la apariencia y van dentro de
+`@media (hover: hover)`.
+
+#### Scenario: Hojas de estilo sin hover
+- **WHEN** se revisan las hojas de estilo de `web/` (sin contar la de Leaflet)
+- **THEN** no hay ninguna regla `:hover` fuera de `@media (hover: hover)`
+
+#### Scenario: Todo con toques
+- **WHEN** en un Android emulado con pantalla táctil y sin ratón se toca el mapa en Madrid, se toca «Ver lista», se toca una fila, se toca «Cerrar», se toca un marcador y se cambia el radio
+- **THEN** cada paso hace lo mismo que con clics: busca, despliega, abre y cierra la ficha y vuelve a buscar
+
+### Requirement: Vertical y horizontal
+La página SHALL funcionar en vertical y en horizontal, y al girar el
+dispositivo conserva la búsqueda, la ficha abierta y el estado de la hoja.
+
+#### Scenario: Girar con la ficha abierta
+- **WHEN** en un iPhone en vertical (390×664) con resultados y la ficha de "1001" abierta se pasa a horizontal (750×342) y otra vez a vertical
+- **THEN** en los dos giros la ficha sigue abierta y entera, «Cerrar» se ve, no aparece scroll de la página, no se hace ninguna petición nueva, y el marcador de "1001" sigue en la zona visible del mapa
+
+#### Scenario: Girar con la lista desplegada
+- **WHEN** con la lista desplegada en vertical se pasa a horizontal
+- **THEN** la lista sigue desplegada, mide como mucho el 70 % del alto de la ventana y se desplaza dentro de la hoja
+
+### Requirement: Alto de la pantalla y zonas seguras
+La página SHALL declarar `<meta name="viewport" content="width=device-width,
+initial-scale=1, viewport-fit=cover">` sin impedir el zoom, usar alturas en
+`dvh` (nunca `100vh`) y respetar `env(safe-area-inset-*)` en la hoja
+inferior, la ficha, la caja de atribuciones y el zoom, para la muesca y la
+barra inferior de iOS, en vertical y en horizontal.
+
+#### Scenario: Meta viewport
+- **WHEN** se revisa `index.html`
+- **THEN** tiene exactamente esa etiqueta `viewport`, sin `maximum-scale` ni `user-scalable=no`
+
+#### Scenario: Alturas
+- **WHEN** se revisan las hojas de estilo de `web/` (sin contar la de Leaflet)
+- **THEN** no aparece ninguna medida en `vh` sin `d`; `body` y el mapa tienen `height: 100dvh`, y la hoja desplegada y la ficha tienen `max-height: 70dvh`
+
+#### Scenario: Zonas seguras
+- **WHEN** se revisan las hojas de estilo
+- **THEN** la hoja de la lista y la ficha usan `env(safe-area-inset-bottom)`, `env(safe-area-inset-left)` y `env(safe-area-inset-right)` en su relleno, y la esquina superior izquierda del mapa (caja de atribuciones y zoom), `env(safe-area-inset-top)` y `env(safe-area-inset-left)` en su margen
+
+#### Scenario: En el motor de Safari
+- **WHEN** se abre la página en el iPhone emulado con WebKit (390×664)
+- **THEN** WebKit admite `dvh` y `env()` (`CSS.supports`), `body` y el mapa miden lo mismo que la ventana (`window.innerHeight`) y la hoja plegada toca el borde inferior
+
+### Requirement: Peso de la página
+Lo que la página descarga de su propio servidor al abrirse, sin contar las
+respuestas de `/api/`, SHALL sumar como mucho 300 KB. De su propio servidor
+no carga fuentes web ni más imágenes que el favicon. Las teselas de
+OpenStreetMap no cuentan.
+
+#### Scenario: Peso al abrir
+- **WHEN** se abre la página en un iPhone emulado, sin caché, y se suman los bytes de los cuerpos recibidos del propio servidor fuera de `/api/` hasta que la página muestra la búsqueda
+- **THEN** la suma es de 300 KB o menos, y del propio servidor no hay peticiones de fuentes ni de imágenes salvo `favicon.ico`
 
 ### Requirement: Pruebas sin servicios externos
-Los tests de la página SHALL ejecutarse en Chromium con la ubicación
-simulada y las teselas sustituidas por una imagen local. Los casos normales
-usan la API real de la app con una base SQLite de prueba temporal; los
-errores, respuestas fijas guardadas en `tests/fixtures/`. Al ejecutarlos
-MUST NOT salir ninguna petición del equipo (la descarga única de Chromium
-con `playwright install chromium` es un paso previo aparte).
+Los tests de la página SHALL ejecutarse sobre todo con emulación móvil
+táctil: el iPhone en WebKit (el motor de Safari) y el Android en Chromium, y
+al menos una parte en escritorio en Chromium, con la ubicación simulada y
+las teselas sustituidas por una imagen local. Los casos normales usan la API
+real con una base de prueba temporal; los errores, respuestas fijas de
+`tests/fixtures/`. MUST NOT salir ninguna petición del equipo.
 
 #### Scenario: Ejecución de los tests
 - **WHEN** se ejecutan todos los tests de la página registrando las peticiones del navegador
 - **THEN** ninguna petición llega a OpenStreetMap, a la API del Ministerio ni a la API del VPS, y un test falla si la página lo intenta
+
+#### Scenario: Dispositivos de los tests
+- **WHEN** se revisan los tests de la página
+- **THEN** por defecto se ejecutan con el iPhone 13 de Playwright en WebKit (390×664, táctil, móvil); los de horizontal, a 750×342 en WebKit; los de comportamiento común se repiten con el Pixel 7 en Chromium (412×839, táctil, móvil); los de tamaño mínimo, a 320×568 táctil en Chromium; y los de panel lateral, teclado y desplazamiento de la lista, en escritorio en Chromium (1280×800)
 
 #### Scenario: Encaje con la API real
 - **WHEN** se ejecuta el test de búsqueda en Madrid contra la app con una base de prueba con las estaciones "1001" a "1006" del escenario «Búsqueda en Madrid» de `prices-api`
@@ -787,8 +969,19 @@ publicar ningún puerto nuevo.
 ### Requirement: Cómo abrir la web en el README
 El README SHALL explicar cómo abrir la página en el Mac y por el túnel SSH
 desde el VPS, qué hacer si el puerto 8000 del Mac ya está ocupado, que las
-teselas necesitan internet y a quién llega la ubicación.
+teselas necesitan internet, a quién llega la ubicación, cómo instalar los
+navegadores de los tests y, como verificación opcional, cómo probarla en el
+Simulador de iOS de Xcode.
 
 #### Scenario: Lectura del README
 - **WHEN** se lee la sección de la web del README
 - **THEN** incluye `http://127.0.0.1:8000/`, el comando del túnel con `<IP_DEL_VPS>`, cómo usar otro puerto local (por ejemplo 8001) si el 8000 está ocupado por la API del Mac, que el mapa necesita internet para las teselas de OpenStreetMap, y que la ubicación y el punto pinchado solo se envían a la propia API, redondeados a unos 100 m, y no se guardan, mientras que OpenStreetMap recibe las peticiones de las teselas de la zona que se ve
+
+#### Scenario: Navegadores de los tests
+- **WHEN** se lee la sección de tests del README
+- **THEN** incluye `.venv/bin/playwright install chromium` y `.venv/bin/playwright install webkit`
+
+#### Scenario: Simulador de iOS
+- **WHEN** se lee la sección de la web del README
+- **THEN** explica, como verificación opcional que no bloquea nada, cómo abrir el Simulador de iOS de Xcode, abrir Safari en él con `http://127.0.0.1:8000/` (el Simulador llega a `127.0.0.1` del Mac y, por él, al túnel), darle una ubicación simulada (Features → Location) y qué comprobar: la hoja inferior, la ficha, los controles abajo y que la muesca y la barra inferior no tapan nada, en vertical y en horizontal
+

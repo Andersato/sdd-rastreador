@@ -1,0 +1,5 @@
+Leaflet 1.9.4
+Origen: https://registry.npmjs.org/leaflet/-/leaflet-1.9.4.tgz
+integrity (sha512 del tarball, igual a la del registro de npm, comprobada el 2026-10-18):
+sha512-nxS1ynzJOmOlHp+iL3FyWqK89GtNL8U8rvlMOsQdTTssxZwCXh8N2NB3GDQOL+YR3XnWyZAxwQixURb+FA74PA==
+Archivos copiados de package/: dist/leaflet.js, dist/leaflet.css, dist/images/ y LICENSE (BSD-2-Clause).

@@ -115,7 +115,7 @@ def test_image_built_with_local_files_excludes_them(image, context, tags):
     assert dbs.stdout.strip() == ""
     listing = in_image(tag, "ls", "-A", "/app")
     assert listing.returncode == 0, listing.stderr
-    assert sorted(listing.stdout.split()) == ["container", "src"]
+    assert sorted(listing.stdout.split()) == ["container", "src", "web"]
 
 
 def test_image_built_with_backups_excludes_them(image, context, tags):

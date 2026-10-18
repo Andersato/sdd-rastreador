@@ -89,10 +89,13 @@ def hold_lock(db_path, seconds: float, mode: str = "EXCLUSIVE"):
 NOW = datetime(2026, 10, 16, 10, 0, 0, tzinfo=UTC)
 
 
-def make_client(db_path, *, now=NOW, interval_text=None, read_options=None, log_line=None):
+def make_client(db_path, *, now=NOW, interval_text=None, read_options=None, log_line=None,
+                **web):
     """Cliente HTTP de pruebas (TestClient, con httpx) sobre la API de `db_path`.
 
     Las excepciones no previstas se responden como 500, igual que en marcha.
+    Por defecto la web de `web/` va montada en `/`, como en marcha; con
+    `web_dir=None`, sin web.
     """
     from fastapi.testclient import TestClient
 
@@ -100,7 +103,8 @@ def make_client(db_path, *, now=NOW, interval_text=None, read_options=None, log_
 
     check_not_real_data(db_path)
     app = create_app(Path(db_path), interval_text=interval_text, clock=lambda: now,
-                     read_options=read_options, log_line=log_line or (lambda line: None))
+                     read_options=read_options, log_line=log_line or (lambda line: None),
+                     **web)
     return TestClient(app, raise_server_exceptions=False)
 
 

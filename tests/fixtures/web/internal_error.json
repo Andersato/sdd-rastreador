@@ -1,0 +1,11 @@
+{
+ "status": 500,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "error": {
+   "code": "error_interno",
+   "message": "error interno de la API; revisa el log del servicio"
+  }
+ }
+}

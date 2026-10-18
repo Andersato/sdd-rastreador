@@ -1,0 +1,40 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "fuel": {
+    "name": "Gasoleo A",
+    "slug": "gasoleo-a",
+    "unit": "€/l",
+    "kind": "combustible"
+   },
+   "center": {
+    "lat": 40.417,
+    "lon": -3.704
+   },
+   "radius_km": 10,
+   "limit": 100,
+   "total": 1,
+   "stations": [
+    {
+     "id": "1001",
+     "brand": "REPSOL",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Madrid",
+     "province": "MADRID",
+     "latitude": 40.42,
+     "longitude": -3.7,
+     "price": 1.459,
+     "unit": "€/l",
+     "distance_km": 0.91
+    }
+   ]
+  },
+  "capture": {
+   "downloaded_at": "ayer",
+   "source_date": null
+  }
+ }
+}

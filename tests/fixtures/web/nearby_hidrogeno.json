@@ -1,0 +1,40 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "fuel": {
+    "name": "Hidrogeno",
+    "slug": "hidrogeno",
+    "unit": "€/kg",
+    "kind": "combustible"
+   },
+   "center": {
+    "lat": 40.417,
+    "lon": -3.704
+   },
+   "radius_km": 10,
+   "limit": 100,
+   "total": 1,
+   "stations": [
+    {
+     "id": "9001",
+     "brand": "HYDRO",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Madrid",
+     "province": "MADRID",
+     "latitude": 40.45,
+     "longitude": -3.69,
+     "price": 12.95,
+     "unit": "€/kg",
+     "distance_km": 4.2
+    }
+   ]
+  },
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

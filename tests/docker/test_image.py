@@ -73,7 +73,7 @@ def test_no_database_or_env_anywhere(image):
 def test_app_folder_only_has_code(image):
     result = in_image(image, "ls", "-A", "/app")
     assert result.returncode == 0, result.stderr
-    assert sorted(result.stdout.split()) == ["container", "src"]
+    assert sorted(result.stdout.split()) == ["container", "src", "web"]
 
 
 def test_default_user_is_not_root(image):

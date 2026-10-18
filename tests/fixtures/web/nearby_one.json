@@ -1,0 +1,40 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "fuel": {
+    "name": "Gasoleo A",
+    "slug": "gasoleo-a",
+    "unit": "€/l",
+    "kind": "combustible"
+   },
+   "center": {
+    "lat": 40.417,
+    "lon": -3.704
+   },
+   "radius_km": 10,
+   "limit": 100,
+   "total": 1,
+   "stations": [
+    {
+     "id": "1003",
+     "brand": "CEPSA",
+     "address": "CALLE MAYOR, 1",
+     "municipality": "Madrid",
+     "province": "MADRID",
+     "latitude": 40.44,
+     "longitude": -3.73,
+     "price": 1.399,
+     "unit": "€/l",
+     "distance_km": 3.4
+    }
+   ]
+  },
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

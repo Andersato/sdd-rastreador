@@ -1,0 +1,13 @@
+{
+ "status": 503,
+ "headers": {
+  "Retry-After": "5"
+ },
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "error": {
+   "code": "base_ocupada",
+   "message": "la base de datos está ocupada guardando una captura; inténtalo de nuevo en unos segundos"
+  }
+ }
+}

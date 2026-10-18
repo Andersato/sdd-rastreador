@@ -16,6 +16,28 @@ datos reales.
   - web/: interfaz.
 - Código y nombres en inglés; specs y documentación en español.
 
+## Interfaz: mobile first
+Toda interfaz del proyecto es mobile first, desde la propuesta:
+- El CSS base es para móvil (320–430 px de ancho) y el escritorio se añade
+  con media queries `min-width` (mejora progresiva); nunca `max-width`.
+- En móvil el contenido principal (el mapa) ocupa toda la pantalla; listas y
+  fichas van en hojas inferiores, no en globos sobre el mapa. En escritorio,
+  panel lateral.
+- Controles principales al alcance del pulgar (mitad inferior en móvil).
+  Objetivos táctiles de 44×44 px como mínimo; solo quedan fuera los
+  marcadores del mapa que tengan otra vía accesible (una lista) y los
+  enlaces dentro de un texto.
+- Nada depende de hover. Funciona en vertical y en horizontal.
+- Alturas con `dvh` (nunca `100vh`), márgenes con `env(safe-area-inset-*)`
+  para la muesca y la barra inferior de iOS, y meta viewport
+  `width=device-width, initial-scale=1, viewport-fit=cover` sin impedir el
+  zoom.
+- Presupuesto de peso de la página (sin contar teselas ni datos de la API)
+  adecuado para datos móviles, fijado en cada spec; sin fuentes externas.
+- Los tests de Playwright se ejecutan principalmente con emulación móvil (un
+  iPhone en WebKit, el motor de Safari, y un Android en Chromium, con toque)
+  y al menos uno de escritorio.
+
 ## Fuente de datos
 - API REST oficial del Ministerio:
   https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/

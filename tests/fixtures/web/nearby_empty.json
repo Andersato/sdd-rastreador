@@ -1,0 +1,27 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "fuel": {
+    "name": "Hidrogeno",
+    "slug": "hidrogeno",
+    "unit": "€/kg",
+    "kind": "combustible"
+   },
+   "center": {
+    "lat": 40.417,
+    "lon": -3.704
+   },
+   "radius_km": 10,
+   "limit": 100,
+   "total": 0,
+   "stations": []
+  },
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

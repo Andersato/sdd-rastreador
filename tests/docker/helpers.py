@@ -46,7 +46,7 @@ HOST_ALIAS = "host.docker.internal"
 CLOSED_PORT_URL = "http://127.0.0.1:9/api"
 UNRESOLVABLE_URL = "http://api.precios.invalid/api"
 NO_PROXY_VALUE = f"{HOST_ALIAS},127.0.0.1,localhost"
-BUILD_FILES = ("Dockerfile", ".dockerignore", "requirements.txt", "src", "container")
+BUILD_FILES = ("Dockerfile", ".dockerignore", "requirements.txt", "src", "container", "web")
 
 
 def docker_env(extra=None) -> dict[str, str]:

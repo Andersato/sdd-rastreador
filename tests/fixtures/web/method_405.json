@@ -1,0 +1,13 @@
+{
+ "status": 405,
+ "headers": {
+  "Allow": "GET"
+ },
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "error": {
+   "code": "metodo_no_permitido",
+   "message": "solo se admite GET"
+  }
+ }
+}

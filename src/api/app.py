@@ -16,6 +16,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from . import web
+
 from . import geo, queries
 from .access_log import add_access_log
 from .catalog import BY_NAME, BY_SLUG, CATALOG, Fuel
@@ -26,6 +28,7 @@ from .health import ERROR, health_state
 
 ATTRIBUTION = ("Ministerio de Industria, Comercio y Turismo - Precios de carburantes "
                "en estaciones de servicio")
+DEFAULT_WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 DEFAULT_RADIUS_KM = 5
 MAX_RADIUS_KM = 50
 DEFAULT_LIMIT = 20
@@ -84,9 +87,12 @@ def station_fields(row) -> dict:
 def create_app(db_path: Path, *, interval_text: str | None = None,
                clock: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
                read_options: dict | None = None,
-               log_line: Callable[[str], None] | None = None) -> FastAPI:
+               log_line: Callable[[str], None] | None = None,
+               web_dir: Path | None = DEFAULT_WEB_DIR) -> FastAPI:
     """Aplicación sobre `db_path`. `log_line` recibe la línea de cada petición
-    (por defecto, a la salida estándar); `read_options` solo lo usan los tests."""
+    (por defecto, a la salida estándar); `read_options` solo lo usan los tests.
+    `web_dir` es la carpeta de la página web que se sirve en `/` (map-view);
+    con `None`, o si no existe, no se sirve nada fuera de `/api/`."""
     read_options = read_options or {}
     app = FastAPI(
         title="Precios de Gasolineras",
@@ -119,9 +125,13 @@ def create_app(db_path: Path, *, interval_text: str | None = None,
             return error_response(ApiError(404, "no_encontrado",
                                            f"no existe la ruta {request.url.path}"))
         if exc.status_code == 405:
-            return error_response(ApiError(405, "metodo_no_permitido",
-                                           "la API es de solo lectura: solo se admite GET",
-                                           {"Allow": "GET"}))
+            # La web admite GET y HEAD (StaticFiles ya lo indica en `Allow`);
+            # las rutas de la API, solo GET.
+            allow = (exc.headers or {}).get("Allow", "GET")
+            message = (web.METHOD_MESSAGE if "HEAD" in allow
+                       else "la API es de solo lectura: solo se admite GET")
+            return error_response(ApiError(405, "metodo_no_permitido", message,
+                                           {"Allow": allow}))
         return error_response(ApiError(exc.status_code, "error_http", str(exc.detail)))
 
     @app.exception_handler(Exception)
@@ -226,5 +236,10 @@ def create_app(db_path: Path, *, interval_text: str | None = None,
                  for name, prices in groups.items()]
         items.sort(key=lambda item: (item["average"], item["province"]))
         return success(capture, {"fuel": chosen.as_dict(), "provinces": items})
+
+    # Después de todas las rutas: la web solo atiende lo que no es de /api/.
+    if web_dir is not None and Path(web_dir).is_dir():
+        app.mount("/", web.WebFiles(directory=Path(web_dir), api_routes=list(app.router.routes)),
+                  name="web")
 
     return app

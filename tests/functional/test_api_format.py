@@ -29,7 +29,7 @@ def test_invalid_parameter_with_decimal_comma(client):
     assert "40,4168" not in response.text
 
 
-@pytest.mark.parametrize("path", ["/api/precios", "/"])
+@pytest.mark.parametrize("path", ["/api/precios", "/precios"])
 def test_unknown_route(client, path):
     """Escenario: Ruta inexistente."""
     assert_error(client.get(path), 404, "no_encontrado")

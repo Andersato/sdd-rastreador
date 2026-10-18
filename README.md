@@ -409,6 +409,54 @@ ya usa el 8000), se usa otro puerto: `-L 8001:127.0.0.1:8000` y
   guardando una captura (se repite en unos segundos) o la última recogida
   quedó a medias.
 
+## Web del mapa
+
+Una página con un mapa para ver las gasolineras más baratas cerca de un
+punto. La sirve la propia API, en el mismo puerto: no hay que arrancar nada
+más que `docker compose up -d`.
+
+- En el Mac: **`http://127.0.0.1:8000/`**.
+- Desde el Mac contra el VPS, con el túnel SSH abierto:
+
+  ```sh
+  ssh -N -L 8000:127.0.0.1:8000 deploy@<IP_DEL_VPS>
+  ```
+
+  y `http://127.0.0.1:8000/`. Si el puerto 8000 del Mac ya está ocupado por
+  la API local, se usa otro puerto: `-L 8001:127.0.0.1:8000` y
+  `http://127.0.0.1:8001/`.
+
+Al abrirla pide la ubicación; si no se concede, se elige el punto pinchando
+en el mapa. Está pensada primero para el móvil: el mapa ocupa la pantalla y
+la lista va en una hoja abajo («Ver lista»); en una pantalla ancha, la lista
+va en un panel a la izquierda.
+
+- **Internet:** el mapa necesita conexión para las teselas (las imágenes del
+  mapa), que vienen de OpenStreetMap. Lo demás sale de la propia API.
+- **Privacidad:** la ubicación y el punto pinchado solo se envían a la
+  propia API, redondeados a 3 decimales (unos 100 m), y no se guardan en
+  ningún sitio (tampoco en el navegador ni en la dirección de la página).
+  OpenStreetMap recibe, como en cualquier mapa, las peticiones de las
+  teselas de la zona que se ve. El navegador solo recuerda el combustible y
+  el radio elegidos.
+
+### Probarla en el Simulador de iOS (opcional)
+
+Para ver la página en el Safari de un iPhone, con su muesca y su barra
+inferior, sin publicarla: es una comprobación opcional, que no bloquea nada.
+
+1. Con la API en marcha en el Mac (o el túnel al VPS abierto), abrir el
+   Simulador: Xcode → Open Developer Tool → Simulator, y elegir un iPhone con
+   muesca (File → Open Simulator).
+2. En el Simulador, abrir Safari en `http://127.0.0.1:8000/`. El Simulador
+   comparte la red del Mac, así que llega a su `127.0.0.1` y, por él, al
+   túnel.
+3. Darle una ubicación: Features → Location → Custom Location (por ejemplo,
+   40.4168 y -3.7038) y aceptar el permiso en Safari.
+4. Comprobar, en vertical y en horizontal (Device → Rotate Left): la hoja de
+   la lista y «Ver lista», la ficha al tocar un precio, que los controles
+   quedan abajo y que ni la muesca ni la barra inferior tapan nada.
+
 ## Protección del proyecto real frente a los agentes de Claude Code
 
 Con el programador en marcha, ningún agente de Claude Code (la sesión
@@ -450,6 +498,18 @@ tests están en `tests/unit/test_guard_hook.py`.
 Los tests nunca llaman a la API real: usan respuestas guardadas en
 `tests/fixtures/` y un servidor HTTP local. Cualquier conexión a otra máquina
 falla a propósito durante los tests.
+
+Los tests de la web (marca `browser`) usan los navegadores de Playwright: el
+iPhone se emula con WebKit (el motor de Safari) y el Android y el escritorio,
+con Chromium. Se descargan una vez:
+
+```sh
+.venv/bin/playwright install chromium
+.venv/bin/playwright install webkit
+```
+
+Si falta alguno, sus tests se saltan con un aviso. Tampoco ellos salen del
+equipo: las teselas del mapa se sustituyen por una imagen local.
 
 Los tests de `tests/docker/` construyen la imagen y lanzan contenedores
 (siempre contra el servidor local y con una carpeta de datos temporal). Se

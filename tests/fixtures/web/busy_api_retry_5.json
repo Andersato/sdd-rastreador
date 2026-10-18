@@ -1,0 +1,13 @@
+{
+ "status": 503,
+ "headers": {
+  "Retry-After": "5"
+ },
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "error": {
+   "code": "api_ocupada",
+   "message": "la API está atendiendo demasiadas consultas; inténtalo de nuevo en unos segundos"
+  }
+ }
+}

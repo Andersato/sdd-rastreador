@@ -1,0 +1,160 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": [
+   {
+    "name": "Gasoleo A",
+    "slug": "gasoleo-a",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 3
+   },
+   {
+    "name": "Gasolina 95 E5",
+    "slug": "gasolina-95-e5",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 2
+   },
+   {
+    "name": "Adblue",
+    "slug": "adblue",
+    "unit": "€/l",
+    "kind": "aditivo",
+    "stations": 1
+   },
+   {
+    "name": "Hidrogeno",
+    "slug": "hidrogeno",
+    "unit": "€/kg",
+    "kind": "combustible",
+    "stations": 1
+   },
+   {
+    "name": "Biodiesel",
+    "slug": "biodiesel",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Bioetanol",
+    "slug": "bioetanol",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Biogas Natural Comprimido",
+    "slug": "biogas-natural-comprimido",
+    "unit": "€/kg",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Biogas Natural Licuado",
+    "slug": "biogas-natural-licuado",
+    "unit": "€/kg",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Diésel Renovable",
+    "slug": "diesel-renovable",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gas Natural Comprimido",
+    "slug": "gas-natural-comprimido",
+    "unit": "€/kg",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gas Natural Licuado",
+    "slug": "gas-natural-licuado",
+    "unit": "€/kg",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gases licuados del petróleo",
+    "slug": "gases-licuados-del-petroleo",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasoleo B",
+    "slug": "gasoleo-b",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasoleo Premium",
+    "slug": "gasoleo-premium",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasolina 95 E10",
+    "slug": "gasolina-95-e10",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasolina 95 E25",
+    "slug": "gasolina-95-e25",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasolina 95 E5 Premium",
+    "slug": "gasolina-95-e5-premium",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasolina 95 E85",
+    "slug": "gasolina-95-e85",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasolina 98 E10",
+    "slug": "gasolina-98-e10",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasolina 98 E5",
+    "slug": "gasolina-98-e5",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   },
+   {
+    "name": "Gasolina Renovable",
+    "slug": "gasolina-renovable",
+    "unit": "€/l",
+    "kind": "combustible",
+    "stations": 0
+   }
+  ],
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}
