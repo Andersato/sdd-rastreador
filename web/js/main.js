@@ -18,7 +18,6 @@ const state = {
   point: null, // punto de búsqueda redondeado {lat, lon}
   pointFromLocation: false,
   location: null, // ubicación del navegador, redondeada
-  locationOutside: false, // esa ubicación dio fuera_de_espana
   waitingLocation: true,
   userClicked: false, // no se borra aunque el punto se quite tras un 422
   stations: [],
@@ -204,7 +203,6 @@ function outsideSpain() {
   retryAction = null;
   view.showMessage(MESSAGES.outside_spain, {retryable: false});
   if (fromLocation) {
-    state.locationOutside = true;
     map.showSpain();
     if (document.activeElement === back) view.elements.status.focus();
     back.hidden = true;
@@ -230,7 +228,6 @@ function onMapClick(lat, lon) {
 function onLocation(position) {
   const {latitude, longitude} = position.coords;
   state.location = searchPoint(latitude, longitude);
-  state.locationOutside = false;
   state.waitingLocation = false;
   view.setHint(null);
   back.hidden = false;

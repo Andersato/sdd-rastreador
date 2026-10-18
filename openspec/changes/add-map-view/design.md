@@ -628,6 +628,26 @@ fórmula de luminancia relativa de WCAG.
   actualizar el VPS.
   → **Mitigación:** `Cache-Control: no-cache` con `ETag`.
 
+## Verificación manual (tareas 12.2 y 12.3, 2026-10-18)
+
+- **Mac (12.2)**, API local con los datos del 16/10, arrancada con `docker
+  compose up -d api` (el programador exige `./backups` y en el Mac no hace
+  falta; queda en el README). En Chrome, `http://127.0.0.1:8000/` con la
+  ubicación concedida y denegada: mapa, lista y ficha correctos. Con la vista
+  de móvil de las herramientas de desarrollo: hoja inferior, «Ver lista»,
+  ficha y giro correctos. El aviso de datos desactualizados se ve, como
+  corresponde a datos del 16/10. No se probó el Simulador de iOS (opcional).
+- **VPS (12.3)**: actualización con la sección 13 del runbook, sin
+  incidencias. Por el túnel, en el Mac, la página muestra los precios del día sin aviso.
+  También se abrió desde un móvil real de la misma Wi-Fi, con el túnel
+  escuchando en `0.0.0.0:8001` del Mac: la página se ve y funciona (hoja,
+  lista y ficha); la ubicación automática no está disponible, porque el
+  navegador solo la da en HTTPS o en `127.0.0.1`, y se elige el punto
+  pinchando, como prevé la spec.
+  *Nota:* mientras el túnel escucha en `0.0.0.0`, cualquier equipo de esa
+  red llega a la API y a la web; el procedimiento documentado sigue siendo
+  el túnel en `127.0.0.1`.
+
 ## Migration Plan
 
 - **Sin migración de datos:** la base no cambia y la API sigue abriéndola

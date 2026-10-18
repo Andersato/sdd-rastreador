@@ -218,8 +218,8 @@
   - no se ha saltado ningún test `browser`, ni de WebKit ni de Chromium;
   - el escenario «Dispositivos de los tests»: la lista de tests ejecutados muestra los cinco dispositivos (iPhone 13 en vertical y en horizontal, Pixel 7, 320×568 y escritorio) y los dos motores de D11;
   - la guarda de red no ha anotado ninguna petición fuera de `127.0.0.1`.
-- [ ] 12.2 Verificación manual en el Mac: `docker compose up -d` y abrir `http://127.0.0.1:8000/`, con la ubicación concedida y denegada, en el navegador de escritorio y con la vista de móvil de sus herramientas de desarrollo. La lanza el usuario, y el resultado se anota en design.md. Opcional y sin bloquear el archivo: la misma prueba en el Simulador de iOS de Xcode con los pasos del README.
-- [ ] 12.3 Verificación manual en el VPS: pasar al usuario los comandos de despliegue de `docs/vps-deployment.md`, sección 13, y abrir la página por el túnel. La lanza el usuario, y el resultado se anota en el registro de `docs/vps-deployment.md`.
+- [x] 12.2 Verificación manual en el Mac: `docker compose up -d` y abrir `http://127.0.0.1:8000/`, con la ubicación concedida y denegada, en el navegador de escritorio y con la vista de móvil de sus herramientas de desarrollo. La lanza el usuario, y el resultado se anota en design.md. Opcional y sin bloquear el archivo: la misma prueba en el Simulador de iOS de Xcode con los pasos del README.
+- [x] 12.3 Verificación manual en el VPS: pasar al usuario los comandos de despliegue de `docs/vps-deployment.md`, sección 13, y abrir la página por el túnel. La lanza el usuario, y el resultado se anota en el registro de `docs/vps-deployment.md`.
 
 ## Workflow follow-up
 

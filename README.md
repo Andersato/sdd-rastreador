@@ -413,9 +413,15 @@ ya usa el 8000), se usa otro puerto: `-L 8001:127.0.0.1:8000` y
 
 Una página con un mapa para ver las gasolineras más baratas cerca de un
 punto. La sirve la propia API, en el mismo puerto: no hay que arrancar nada
-más que `docker compose up -d`.
+más que la API.
 
-- En el Mac: **`http://127.0.0.1:8000/`**.
+- En el Mac: **`http://127.0.0.1:8000/`**. En el Mac hay que arrancar solo
+  la API, porque el servicio `scheduler` exige la carpeta `./backups` y no
+  arranca sin ella (y en el Mac no recoge):
+
+  ```sh
+  docker compose up -d api
+  ```
 - Desde el Mac contra el VPS, con el túnel SSH abierto:
 
   ```sh
@@ -439,6 +445,41 @@ va en un panel a la izquierda.
   OpenStreetMap recibe, como en cualquier mapa, las peticiones de las
   teselas de la zona que se ve. El navegador solo recuerda el combustible y
   el radio elegidos.
+
+### Probar la web en un móvil real (antes de publicarla)
+
+Para abrir la página del VPS desde un móvil sin publicarla, el Mac comparte
+su túnel con la red local:
+
+1. El móvil y el Mac deben estar en la misma Wi-Fi.
+2. Averiguar la IP del Mac en la red local:
+
+   ```sh
+   ipconfig getifaddr en0      # si no devuelve nada, probar con en1
+   ```
+
+3. Abrir en el Mac un túnel compartido hacia el VPS y dejarlo abierto
+   (`vps-gasolineras` es el alias de `deploy@<IP_DEL_VPS>` en
+   `~/.ssh/config`):
+
+   ```sh
+   ssh -N -L 0.0.0.0:8001:127.0.0.1:8000 vps-gasolineras
+   ```
+
+   El `0.0.0.0` permite que otros dispositivos de la red usen el túnel; el
+   puerto 8001 evita chocar con la API local del Mac. Si macOS pregunta por
+   conexiones entrantes, hay que permitirlas.
+4. En el móvil, abrir `http://<IP del Mac>:8001/`.
+
+Limitaciones y avisos:
+
+- **Sin ubicación automática:** los navegadores solo la dan con HTTPS o en
+  `127.0.0.1`. En el móvil hay que pinchar en el mapa.
+- **Cualquiera en esa Wi-Fi puede abrir la página** mientras el túnel
+  compartido está abierto. Usarlo solo en redes de confianza, nunca en una
+  Wi-Fi pública, y cerrarlo con Ctrl+C al terminar.
+- Para el túnel normal (solo el Mac) sigue valiendo
+  `ssh -N -L 8000:127.0.0.1:8000 vps-gasolineras`.
 
 ### Probarla en el Simulador de iOS (opcional)
 

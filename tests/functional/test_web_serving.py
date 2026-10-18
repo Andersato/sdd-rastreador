@@ -212,14 +212,19 @@ def test_no_documentation_at_the_root_with_web(client, path):
 
 # --- cabeceras (design.md D3 y D4) ---------------------------------------------
 
-@pytest.mark.parametrize("path", ["/", "/favicon.ico"])
-def test_web_headers(client, path):
-    headers = client.get(path).headers
+@pytest.mark.parametrize(("method", "path"), [("GET", "/"), ("GET", "/favicon.ico"),
+                                              ("GET", "/no-existe.js"), ("GET", "/vendor/leaflet/"),
+                                              ("POST", "/"), ("HEAD", "/no-existe.js")])
+def test_web_headers(client, method, path):
+    """design.md D3: las cabeceras de la web, también en sus errores."""
+    response = client.request(method, path)
+    headers = response.headers
     assert headers["cache-control"] == "no-cache"
     assert headers["x-content-type-options"] == "nosniff"
     assert headers["referrer-policy"] == "strict-origin-when-cross-origin"
     assert headers["content-security-policy"] == CONTENT_SECURITY_POLICY
-    assert "etag" in headers
+    if response.status_code == 200:
+        assert "etag" in headers
 
 
 @pytest.mark.parametrize(("method", "path"), [

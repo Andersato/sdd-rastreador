@@ -550,7 +550,7 @@ panel lateral. Se cierra con «Cerrar» o Escape, sin dejar ninguna resaltada.
 
 #### Scenario: Ficha con textos largos en horizontal
 - **WHEN** en un iPhone en horizontal (750×342) se abre la ficha de una gasolinera con un rótulo de 80 caracteres y una dirección de 120
-- **THEN** la ficha mide como mucho el 70 % del alto de la ventana, su contenido se desplaza dentro de ella y «Cerrar» se ve entero sin desplazar nada
+- **THEN** la ficha mide como mucho el 70 % del alto de la ventana, su contenido se desplaza dentro de ella si no cabe y «Cerrar» se ve entero sin desplazar nada
 
 #### Scenario: Ficha en el panel lateral en el escritorio
 - **WHEN** en una ventana de 1280×800 se pulsa "4375"

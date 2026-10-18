@@ -59,6 +59,12 @@ def test_list_with_keyboard(opened):
     web.page.keyboard.press("Enter")
     web.page.wait_for_selector("#detail:not([hidden])")
     assert active_id(web) == "detail-close"
+    # lo mismo que al pulsarla: fila y marcador resaltados, marcador a la vista y su ficha
+    selected = web.page.eval_on_selector_all(".station-row.selected, .price-marker.selected",
+                                             "els => els.map(e => e.dataset.id)")
+    assert selected == ["1001", "1001"]
+    assert in_visible_zone(web, [(40.425, -3.7038)])
+    assert "REPSOL" in web.page.locator("#detail-body").inner_text()
 
 
 def test_sheet_button(opened):
@@ -288,3 +294,48 @@ def test_no_api_word_in_page_texts(opened, state):
     own = re.sub(r"Detalle:.*", "", own)
     assert not re.search(r"\bapi\b", own, re.IGNORECASE), own
     assert text(web, "#message") is None or "API" not in text(web, "#message").split("Detalle:")[0]
+
+
+# --- Refuerzos de la revisión de cobertura -------------------------------------------
+
+@pytest.mark.parametrize(("nearby", "expected"), [
+    ("internal_error", "El servidor ha dado un error. Inténtalo más tarde."),
+    ("busy_base_retry_5", "El servidor está ocupado; inténtalo en unos segundos"),
+])
+def test_error_is_announced(opened, nearby, expected):
+    """Escenario: Avisos anunciados (un error): el mensaje está en la zona que
+    anuncian los lectores de pantalla."""
+    web = opened(nearby=nearby, geo={"kind": "grant", "lat": MADRID[0], "lon": MADRID[1]})
+    web.page.wait_for_selector("#message:not([hidden])")
+    announced = web.page.locator("[aria-live=polite] #message, [role=status] #message, "
+                                 "[role=alert] #message")
+    assert announced.count() == 1
+    assert announced.inner_text() == expected
+
+
+@pytest.mark.parametrize("device", ["small", "desktop"])
+def test_touch_target_of_retry(opened, device):
+    """Escenario: Objetivos táctiles («Reintentar», que solo se ve con un error)."""
+    web = opened(nearby="internal_error", device=device,
+                 geo={"kind": "grant", "lat": MADRID[0], "lon": MADRID[1]})
+    web.page.wait_for_selector("#retry:not([hidden])")
+    targets = touch_targets(web)
+    assert any(name == "retry" for name, _, _ in targets)
+    for name, width, height in targets:
+        assert width >= 44 and height >= 44, (name, width, height)
+
+
+@pytest.mark.parametrize("device", ["small", "desktop"])
+def test_every_marker_has_a_measured_row(opened, device):
+    """Escenario: Excepciones: cada gasolinera de un marcador tiene su fila en la
+    lista, y la fila mide al menos 44×44 px."""
+    web = opened(nearby="nearby_40", device=device)
+    if device == "small":
+        web.press("#toggle")
+        web.page.wait_for_selector("#panel.expanded")
+    markers = web.page.eval_on_selector_all(".price-marker", "els => els.map(e => e.dataset.id)")
+    rows = web.page.eval_on_selector_all(".station-row", """els => els.map(e => {
+        const r = e.getBoundingClientRect(); return [e.dataset.id, r.width, r.height]; })""")
+    assert len(markers) == 40 and sorted(markers) == sorted(r[0] for r in rows)
+    for station_id, width, height in rows:
+        assert width >= 44 and height >= 44, (station_id, width, height)

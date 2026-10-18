@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
+from tests.web_fixtures import GEO_SCRIPT, WebPage
 from tests.web_helpers import (CLICK_HINT, MADRID, circle_in_view, click_map, has_circle,
                                nearby_calls, seed_madrid, text, wait_until)
 
@@ -113,19 +114,58 @@ def test_change_radius_without_point(open_page, seeded):
 # --- Recordar la última elección -------------------------------------------------------
 
 def test_open_again(open_page, seeded):
-    """Escenario: Volver a abrir."""
+    """Escenario: Volver a abrir (se cierra la página y se abre otra en el mismo
+    navegador; se mira solo la primera búsqueda de la página nueva)."""
     web = open_page(geo=GRANT, clock=False)
     web.page.wait_for_selector("#count:not([hidden])")
     web.page.select_option("#fuel", "gasolina-95-e5")
+    wait_until(web, lambda: len(nearby_calls(web)) == 2)
     web.page.select_option("#radius", "25")
-    web.page.wait_for_timeout(300)
-    web.page.reload()
-    web.page.wait_for_selector("#fuel:not([disabled])")
-    wait_until(web, lambda: len(nearby_calls(web)) >= 3)
-    assert selected(web, "#fuel") == "gasolina-95-e5"
-    assert selected(web, "#radius") == "25"
-    first = params(nearby_calls(web)[-1])
+    wait_until(web, lambda: len(nearby_calls(web)) == 3)
+    web.page.wait_for_selector("#count:not([hidden])")
+    context = web.page.context
+    web.page.close()
+    before = len(nearby_calls(web))
+    again = WebPage(context.new_page(), web.guard, web.base, web.device)
+    again.page.add_init_script(script=f"({GEO_SCRIPT})({json.dumps(GRANT)})")
+    again.page.goto(web.base + "/")
+    again.page.wait_for_selector("#count:not([hidden])")
+    again.page.wait_for_timeout(300)
+    assert selected(again, "#fuel") == "gasolina-95-e5"
+    assert selected(again, "#radius") == "25"
+    new_calls = nearby_calls(web)[before:]
+    assert len(new_calls) == 1
+    first = params(new_calls[0])
     assert (first["fuel"], first["radius_km"]) == ("gasolina-95-e5", "25")
+
+
+GET_THROWS = """Storage.prototype.getItem = function () {
+  throw new DOMException('bloqueado', 'SecurityError'); };"""
+SET_THROWS = """Storage.prototype.setItem = function () {
+  throw new DOMException('lleno', 'QuotaExceededError'); };"""
+
+
+@pytest.mark.parametrize("script", [GET_THROWS, SET_THROWS], ids=["al leer", "al guardar"])
+def test_storage_that_fails_reading_or_writing(open_page, seeded, script):
+    """Escenario: Almacenamiento bloqueado (error solo al leer o solo al guardar):
+    valores por defecto, búsqueda, cambios, ficha y ningún error."""
+    web = open_page(geo=GRANT, clock=False, init_scripts=[script])
+    web.page.wait_for_selector("#count:not([hidden])")
+    assert (selected(web, "#fuel"), selected(web, "#radius")) == ("gasoleo-a", "10")
+    first = params(nearby_calls(web)[0])
+    assert (first["fuel"], first["radius_km"]) == ("gasoleo-a", "10")
+    web.page.select_option("#radius", "25")
+    wait_until(web, lambda: len(nearby_calls(web)) == 2)
+    web.page.select_option("#fuel", "gasolina-95-e5")
+    wait_until(web, lambda: len(nearby_calls(web)) == 3)
+    assert params(nearby_calls(web)[-1])["fuel"] == "gasolina-95-e5"
+    web.page.wait_for_selector("#count:not([hidden])")
+    web.press("#cheapest")
+    web.page.wait_for_selector("#detail:not([hidden])")
+    web.press("#detail-close")
+    web.page.wait_for_selector("#detail", state="hidden")
+    assert text(web, "#message") is None
+    assert web.console_errors == []
 
 
 def test_saved_fuel_no_longer_sold(open_page):

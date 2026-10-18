@@ -16,9 +16,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import web
-
-from . import geo, queries
+from . import geo, queries, web
 from .access_log import add_access_log
 from .catalog import BY_NAME, BY_SLUG, CATALOG, Fuel
 from .db import Capture, read_snapshot
@@ -121,17 +119,19 @@ def create_app(db_path: Path, *, interval_text: str | None = None,
 
     @app.exception_handler(StarletteHTTPException)
     def http_error(request: Request, exc: StarletteHTTPException):
+        # Las cabeceras de la excepción se conservan: en los errores de la web
+        # incluyen las de D3 (CSP, nosniff…); en los de la API no hay ninguna.
+        headers = dict(exc.headers or {})
         if exc.status_code == 404:
             return error_response(ApiError(404, "no_encontrado",
-                                           f"no existe la ruta {request.url.path}"))
+                                           f"no existe la ruta {request.url.path}", headers))
         if exc.status_code == 405:
             # La web admite GET y HEAD (StaticFiles ya lo indica en `Allow`);
             # las rutas de la API, solo GET.
-            allow = (exc.headers or {}).get("Allow", "GET")
-            message = (web.METHOD_MESSAGE if "HEAD" in allow
+            headers.setdefault("Allow", "GET")
+            message = (web.METHOD_MESSAGE if "HEAD" in headers["Allow"]
                        else "la API es de solo lectura: solo se admite GET")
-            return error_response(ApiError(405, "metodo_no_permitido", message,
-                                           {"Allow": allow}))
+            return error_response(ApiError(405, "metodo_no_permitido", message, headers))
         return error_response(ApiError(exc.status_code, "error_http", str(exc.detail)))
 
     @app.exception_handler(Exception)

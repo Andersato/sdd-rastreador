@@ -389,3 +389,64 @@ def test_no_list_without_point(opened):
     web.page.wait_for_selector("#fuel:not([disabled])")
     assert not web.page.locator("#toggle").is_visible()
     assert not web.page.locator("#cheapest").is_visible()
+
+
+# --- Refuerzos de la revisión de cobertura -------------------------------------------
+
+@pytest.mark.parametrize(("chosen", "second_fuels", "expected"), [
+    ("gasolina-95-e5", "fuels_ok", "gasolina-95-e5"),
+    ("hidrogeno", "fuels_hidrogeno_zero", "gasoleo-a"),
+], ids=["sigue en la lista", "ya no está"])
+def test_retry_after_unknown_fuel_uses_chosen_or_first(opened, chosen, second_fuels, expected):
+    """Escenario: Reintentar tras combustible desconocido (con el combustible
+    elegido si sigue en la lista, o con el primero si no)."""
+    web = opened(nearby=("unknown_fuel", "nearby_madrid"), clock=False,
+                 fuels=("fuels_ok", second_fuels), init_scripts=[prefs(fuel=chosen)])
+    wait_message(web, SERVER_ERROR)
+    assert params(nearby_calls(web)[0])["fuel"] == chosen
+    web.press("#retry")
+    web.page.wait_for_selector("#count:not([hidden])")
+    web.page.wait_for_timeout(300)
+    assert len(web.mocks["fuels"].calls) == 2
+    assert len(nearby_calls(web)) == 2
+    assert params(nearby_calls(web)[-1])["fuel"] == expected
+    assert web.page.eval_on_selector("#fuel", "e => e.value") == expected
+
+
+@pytest.mark.parametrize("name", ["network_error", "internal_error", "bad_gateway_html",
+                                  "unknown_fuel", "no_captures", "busy_base_retry_5"])
+def test_errors_leave_no_old_results(opened, name):
+    """«API caída o respuesta inesperada» (sin dejar resultados viejos) y
+    escenario Sin recuento: tras resultados, un error quita lista, marcadores,
+    recuento y más barata."""
+    web = opened(clock=False, nearby=("nearby_madrid", name))
+    web.page.wait_for_selector("#count:not([hidden])")
+    assert station_markers(web) == 3
+    web.page.select_option("#radius", "25")
+    wait_message(web)
+    assert no_results(web)
+    assert not web.page.locator("#cheapest").is_visible()
+    assert web.page.locator("#retry").is_visible()
+
+
+def test_no_results_removes_previous_ones(opened):
+    """«Sin gasolineras en el radio»: no quedan marcadores ni lista de la búsqueda
+    anterior, y el círculo sigue dibujado."""
+    web = opened(clock=False, nearby=("nearby_madrid", "nearby_empty_gasoleo"))
+    web.page.wait_for_selector("#count:not([hidden])")
+    web.page.select_option("#radius", "25")
+    wait_message(web, "No hay gasolineras con Gasoleo A a menos de 25 km. Prueba con un radio mayor.")
+    assert no_results(web)
+    assert has_circle(web)
+
+
+def test_busy_is_not_repeated_by_itself(opened):
+    """Escenario: Base ocupada con Retry-After («no se repite la petición sola»,
+    tampoco pasado un minuto)."""
+    web = opened(nearby=("busy_base_retry_5",))
+    wait_message(web, BUSY)
+    web.page.clock.run_for(60_000)
+    web.page.wait_for_timeout(300)
+    assert len(nearby_calls(web)) == 1
+    assert len(web.mocks["fuels"].calls) == 1
+    assert retry_state(web) == (True, False)

@@ -51,7 +51,13 @@ class WebFiles(StaticFiles):
                     headers[name] = value
             await send(message)
 
-        await super().__call__(scope, receive, send_with_headers)
+        try:
+            await super().__call__(scope, receive, send_with_headers)
+        except HTTPException as exc:
+            # Sus errores (404, 405) los responde el manejador común de la app;
+            # llevan también las cabeceras de la web (design.md D3).
+            raise HTTPException(exc.status_code, exc.detail,
+                                headers={**(exc.headers or {}), **WEB_HEADERS}) from exc
 
     def _matches(self, scope: Scope) -> Match:
         best = Match.NONE

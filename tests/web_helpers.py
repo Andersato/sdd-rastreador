@@ -92,3 +92,13 @@ def has_circle(web):
 
 def station_markers(web):
     return web.page.locator(".price-marker").count()
+
+
+def point_and_circle(web):
+    """Centros (lat, lon) del marcador del punto y del círculo del radio (o None)."""
+    return web.page.evaluate("""() => { let point = null, circle = null;
+        window.__mapView.map.leaflet.eachLayer(l => {
+            if (l instanceof L.Circle) { const c = l.getLatLng(); circle = [c.lat, c.lng]; }
+            else if (l instanceof L.CircleMarker) { const c = l.getLatLng(); point = [c.lat, c.lng]; }
+        });
+        return {point, circle}; }""")

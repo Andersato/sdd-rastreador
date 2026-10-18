@@ -74,10 +74,6 @@ export function createMap(element, {onClick, onMarker, covers}) {
 
     clearPoint,
 
-    hasPoint() {
-      return pointMarker !== null;
-    },
-
     fitCircle() {
       if (circle) fit(circle.getBounds());
     },

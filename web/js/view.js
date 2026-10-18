@@ -79,10 +79,6 @@ export function createView({onRetry, onRow, onCheapest, onCloseDetail}) {
       return Math.max(0, window.innerHeight - top);
     },
 
-    isExpanded() {
-      return panel.classList.contains('expanded');
-    },
-
     listVisible() {
       return DESKTOP.matches || panel.classList.contains('expanded');
     },
@@ -127,10 +123,6 @@ export function createView({onRetry, onRow, onCheapest, onCloseDetail}) {
       cheapest.textContent = '';
       toggle.hidden = true;
       if (fold) setExpanded(false);
-    },
-
-    showCapture(text) {
-      show($('capture'), text);
     },
 
     showSummary({count, more, discarded, capture, cheapestText}) {

@@ -91,10 +91,5 @@ export function createSearcher(fetchOne = request) {
       if (mine !== sequence) return {kind: 'stale'};
       return result;
     },
-    cancel() {
-      sequence += 1;
-      if (controller) controller.abort();
-      controller = null;
-    },
   };
 }

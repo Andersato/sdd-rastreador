@@ -12,7 +12,8 @@ import pytest
 
 from tests.web_fixtures import fixture_response, fulfill_args
 from tests.web_helpers import (BARCELONA, MADRID, circle_in_view, click_map, in_visible_zone,
-                               nearby_calls, seed_madrid, station_markers, text, wait_until)
+                               nearby_calls, point_and_circle, seed_madrid, station_markers, text,
+                               wait_until)
 
 pytestmark = pytest.mark.browser
 
@@ -303,15 +304,37 @@ def test_markers_and_legend(mocked):
                      "Colores por tercios de las 4 gasolineras mostradas; el precio mínimo y el "
                      "máximo siempre en sus extremos", "De 1,299 a 1,459 €/l"):
         assert fragment in legend
+    swatches = web.page.eval_on_selector_all(
+        "#legend-tiers .swatch", "els => els.map(e => [e.className, getComputedStyle(e).backgroundColor,"
+        " e.getBoundingClientRect().width > 0])")
+    assert [c.split()[1] for c, _, _ in swatches] == ["tier-cheap", "tier-mid", "tier-expensive"]
+    assert all(shown for _, _, shown in swatches)
+    assert len({colour for _, colour, _ in swatches}) == 3
+    labels = web.page.eval_on_selector_all(
+        ".price-marker .label", "els => Object.fromEntries(els.map(e => [e.className.split(' ')[1],"
+        " getComputedStyle(e).backgroundColor]))")
+    for cls, colour, _ in swatches:  # el color de la leyenda es el de los marcadores
+        tier = cls.split()[1]
+        if tier in labels:
+            assert labels[tier] == colour, tier
 
 
 def test_legend_on_mobile(mocked):
     """Escenario: Leyenda en el móvil."""
     web = mocked("nearby_legend")
     assert not web.page.locator("#legend").is_visible()
-    assert len(tiers_on_map(web)) == 4
+    assert sorted(label for label, _ in tiers_on_map(web)) == ["1,299", "1,399", "1,459", "1,459"]
     expand(web)
     assert web.page.locator("#legend").is_visible()
+    sizes = web.page.evaluate("""() => { const l = document.getElementById('legend').getBoundingClientRect();
+        const b = document.getElementById('panel-body').getBoundingClientRect();
+        return {legend: [l.top, l.bottom], body: [b.top, b.bottom], h: innerHeight}; }""")
+    # completa: entera dentro de la parte visible de la hoja y de la ventana
+    assert sizes["legend"][0] >= sizes["body"][0] - 1 and sizes["legend"][1] <= sizes["body"][1] + 1
+    assert sizes["legend"][1] <= sizes["h"]
+    legend = web.page.locator("#legend").inner_text()
+    for fragment in ("Más barata", "Intermedia", "Más cara", "De 1,299 a 1,459 €/l"):
+        assert fragment in legend
 
 
 @pytest.mark.parametrize(("name", "expected"), [("nearby_same_price", "Todas a 1,459 €/l"),
@@ -371,6 +394,9 @@ def test_fold(mocked):
     assert web.page.get_attribute("#toggle", "aria-expanded") == "false"
     assert not web.page.locator("#list").is_visible()
     assert web.page.locator("#cheapest").is_visible()
+    for hidden in ("#capture", "#legend", "#more", "#discarded", ".station-row"):
+        assert not web.page.locator(hidden).first.is_visible(), hidden
+    assert text(web, "#count") == "3 gasolineras encontradas"
 
 
 def test_tap_the_cheapest(mocked):
@@ -444,8 +470,13 @@ def test_small_phone(open_page, seeded):
     zone = web.page.evaluate("""() => {
         const a = document.querySelector('.leaflet-control-attribution').getBoundingClientRect();
         const p = document.getElementById('panel').getBoundingClientRect();
-        return {ratio: (p.top - a.bottom) / innerHeight, sw: document.scrollingElement.scrollWidth}; }""")
+        const m = document.getElementById('map').getBoundingClientRect();
+        return {ratio: (p.top - a.bottom) / innerHeight, sw: document.scrollingElement.scrollWidth,
+                map: [m.x, m.y, m.width, m.height], size: [innerWidth, innerHeight],
+                expanded: document.getElementById('panel').classList.contains('expanded')}; }""")
     assert zone["sw"] <= 320
+    assert not zone["expanded"]
+    assert zone["map"] == [0, 0, *zone["size"]] and zone["size"] == [320, 568]
     assert zone["ratio"] >= 0.40
 
 
@@ -586,6 +617,24 @@ def test_detail_with_long_texts_in_landscape(open_page):
     assert box["height"] <= 0.7 * height + 1
     close = web.page.locator("#detail-close").bounding_box()
     assert close["y"] >= box["y"] and close["y"] + close["height"] <= height
+    assert "B" * 80 in detail_text(web).replace("\n", "")
+    # Con estos textos, a 750 px de ancho la ficha casi llena su 70 % y el
+    # contenido cabe; para ver que se desplaza dentro de ella, se agranda la
+    # letra del contenido (como con un tamaño de texto mayor del sistema).
+    assert web.page.evaluate(
+        "() => getComputedStyle(document.getElementById('detail-body')).overflowY") in ("auto", "scroll")
+    web.page.evaluate("() => document.getElementById('detail-body').style.setProperty('font-size', '28px')")
+    web.page.wait_for_timeout(100)
+    box = web.page.locator("#detail").bounding_box()
+    assert box["height"] <= 0.7 * height + 1
+    scroll = web.page.evaluate("""() => { const b = document.getElementById('detail-body');
+        const before = b.scrollTop; b.scrollTop = 1000;
+        return {scrolls: b.scrollHeight > b.clientHeight, moved: b.scrollTop > before,
+                page: [scrollX, scrollY]}; }""")
+    assert scroll["scrolls"] and scroll["moved"], scroll  # se desplaza dentro de la ficha
+    assert scroll["page"] == [0, 0]
+    close = web.page.locator("#detail-close").bounding_box()
+    assert close["y"] >= box["y"] and close["y"] + close["height"] <= height + 0.5
 
 
 def test_detail_in_the_side_panel_on_desktop(mocked):
@@ -682,6 +731,13 @@ def attributions_visible_and_uncovered(web):
             assert box["y"] + box["height"] <= web.page.locator(sheet).bounding_box()["y"], sheet
     link = web.page.locator(".leaflet-control-attribution a")
     assert link.get_attribute("href") == "https://www.openstreetmap.org/copyright"
+    # enteras, sin cortarse, y sin tapar los controles del mapa (el zoom)
+    clipped = web.page.evaluate("""() => { const a = document.querySelector('.leaflet-control-attribution');
+        return a.scrollWidth > a.clientWidth + 1 || a.scrollHeight > a.clientHeight + 1; }""")
+    assert not clipped
+    zoom = web.page.locator(".leaflet-control-zoom").bounding_box()
+    assert box["y"] + box["height"] <= zoom["y"] + 0.5
+    assert box["y"] + box["height"] <= web.page.evaluate("() => innerHeight")
 
 
 def test_attributions_with_data(open_page, seeded):
@@ -715,6 +771,7 @@ def test_click_on_barcelona(open_page, seeded):
     wait_until(web, lambda: sorted(web.page.eval_on_selector_all(
         ".price-marker", "e => e.map(x => x.dataset.id)")) == ["8001", "8002"])
     assert circle_in_view(web)  # con la hoja plegada
+    assert point_and_circle(web) == {"point": [41.387, 2.169], "circle": [41.387, 2.169]}
     expand(web)
     assert sorted(web.page.eval_on_selector_all(".station-row", "e => e.map(x => x.dataset.id)")) \
         == ["8001", "8002"]
@@ -753,6 +810,9 @@ def test_click_and_location_never_comes(open_page, seeded, then):
     assert not web.page.locator("#back-to-location").is_visible()
     assert web.page.evaluate("() => window.__mapView.state.point") == {"lat": 41.387, "lon": 2.169}
     assert station_markers(web) == 2
+    assert text(web, "#count") == "2 gasolineras encontradas"
+    assert point_and_circle(web) == {"point": [41.387, 2.169], "circle": [41.387, 2.169]}
+    assert circle_in_view(web)  # el mapa no se ha movido a España entera
 
 
 def test_change_to_hydrogen(open_page):
@@ -826,3 +886,59 @@ def test_page_weight(open_page, seeded):
     assert "font" not in kinds
     images = [r.url for r in own if r.request.resource_type == "image"]
     assert images in ([], [web.base + "/favicon.ico"])
+
+
+# --- Refuerzos de la revisión de cobertura -------------------------------------------
+
+def test_without_colour(mocked):
+    """Escenario: Sin color (escala de grises): cada gasolinera se identifica y
+    compara por el precio escrito en su marcador y en su fila."""
+    web = mocked("nearby_legend")
+    web.page.evaluate("() => document.documentElement.style.setProperty('filter', 'grayscale(1)')")
+    assert web.page.evaluate("() => getComputedStyle(document.documentElement).filter") == "grayscale(1)"
+    expand(web)
+    on_map = dict(web.page.eval_on_selector_all(
+        ".price-marker", "els => els.map(e => [e.dataset.id, e.querySelector('.label').textContent])"))
+    in_list = dict(web.page.eval_on_selector_all(
+        ".station-row", "els => els.map(e => [e.dataset.id, e.querySelector('.price').textContent])"))
+    assert set(on_map) == set(in_list) and len(on_map) == 4
+    for station_id, label in on_map.items():
+        assert label and in_list[station_id].startswith(label), station_id
+    prices = [float(p.split()[0].replace(",", ".")) for p in in_list.values()]
+    assert sorted(prices) == [1.299, 1.399, 1.459, 1.459]
+    assert web.page.locator(".price-marker .label").evaluate_all(
+        "els => els.every(e => e.getBoundingClientRect().width > 0)")
+
+
+def test_no_list_when_there_are_no_results(mocked):
+    """Escenario: Sin lista que mostrar (búsqueda sin resultados): ni «Ver lista»
+    ni la más barata, y el aviso sigue en la hoja."""
+    web = mocked("nearby_madrid", "nearby_empty_gasoleo")
+    search_again(web, 25)
+    web.page.wait_for_selector("#message:not([hidden])")
+    assert not web.page.locator("#toggle").is_visible()
+    assert not web.page.locator("#cheapest").is_visible()
+    inside = web.page.evaluate("""() => { const m = document.getElementById('message');
+        const p = document.getElementById('panel'); const a = m.getBoundingClientRect(),
+        b = p.getBoundingClientRect();
+        return p.contains(m) && a.top >= b.top - 1 && a.bottom <= b.bottom + 1; }""")
+    assert inside
+
+
+def test_no_own_tile_store_after_using_the_page(open_page, seeded):
+    """Escenario: Sin almacén propio de teselas, tras buscar, abrir una ficha,
+    pinchar en otro punto y hacer zoom."""
+    web = open_page(geo=GRANT, clock=False)
+    wait_results(web)
+    tap_marker(web, "1001")
+    web.page.wait_for_selector("#detail:not([hidden])")
+    web.press("#detail-close")
+    click_map(web, *BARCELONA)
+    wait_until(web, lambda: len(nearby_calls(web)) == 2)
+    web.page.evaluate("() => window.__mapView.map.leaflet.setZoom(15, {animate: false})")
+    web.page.wait_for_load_state("networkidle")
+    assert web.guard.tiles
+    stores = web.page.evaluate("""async () => ({
+        workers: navigator.serviceWorker ? (await navigator.serviceWorker.getRegistrations()).length : 0,
+        caches: window.caches ? (await caches.keys()).length : 0 })""")
+    assert stores == {"workers": 0, "caches": 0}

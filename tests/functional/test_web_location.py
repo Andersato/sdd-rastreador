@@ -9,7 +9,7 @@ import pytest
 
 from tests.web_helpers import (BARCELONA, CLICK_HINT, MADRID, SEARCHING, SPAIN_CORNERS,
                                circle_in_view, click_map, in_visible_zone, nearby_calls,
-                               seed_madrid, text, wait_until)
+                               point_and_circle, seed_madrid, text, wait_until)
 
 pytestmark = pytest.mark.browser
 
@@ -45,6 +45,9 @@ def test_location_granted_in_madrid(open_page, seeded, device):
     assert urlsplit(calls[0]).query == "lat=40.417&lon=-3.704&fuel=gasoleo-a&radius_km=10&limit=100"
     point = web.page.evaluate("() => window.__mapView.state.point")
     assert point == {"lat": 40.417, "lon": -3.704}
+    # marca ese punto (redondeado) y dibuja ahí el círculo de 10 km
+    assert point_and_circle(web) == {"point": [40.417, -3.704], "circle": [40.417, -3.704]}
+    assert web.page.locator(".search-point").count() == 1
     assert circle_in_view(web)
     assert web.console_errors == []
 
@@ -62,6 +65,7 @@ def test_back_to_my_location(open_page, seeded):
     assert params(nearby_calls(web)[-1])["lon"] == "-3.704"
     wait_results(web)
     assert web.page.evaluate("() => window.__mapView.state.point") == {"lat": 40.417, "lon": -3.704}
+    assert point_and_circle(web) == {"point": [40.417, -3.704], "circle": [40.417, -3.704]}
     assert circle_in_view(web)
 
 
@@ -145,6 +149,9 @@ def test_late_location_without_click(open_page, seeded):
     assert params(nearby_calls(web)[0])["lat"] == "40.417"
     assert text(web, "#hint") is None
     assert web.page.locator("#back-to-location").is_visible()
+    # igual que si hubiera llegado a tiempo: punto marcado y círculo encuadrado
+    assert point_and_circle(web) == {"point": [40.417, -3.704], "circle": [40.417, -3.704]}
+    assert circle_in_view(web)
 
 
 def test_late_location_after_click(open_page, seeded):
