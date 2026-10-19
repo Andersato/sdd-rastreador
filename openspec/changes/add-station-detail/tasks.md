@@ -72,7 +72,7 @@
 - [ ] 4.2 Añadir a `tests/functional/test_web_detail.py`, con `hold=True` y `page.clock`, los escenarios de «Una petición por gasolinera y búsqueda» y «Sin respuestas de otra ficha»:
   - reabrir, también mientras llega;
   - tres fichas;
-  - nueva búsqueda, también la que provoca la ubicación;
+  - nueva búsqueda, también la de la ubicación del navegador, probada así: abrir "4375", esperar el detalle, cerrar la ficha, pulsar «Volver a mi ubicación» (en el móvil está en la hoja de la lista), reabrir "4375" y comprobar que se pide de nuevo una sola vez;
   - respuesta de una búsqueda anterior (en el navegador se comprueba que la ficha muestra solo la respuesta nueva y que hubo dos peticiones; la petición antigua se aborta, así que su `release()` va dentro de un `try`; el descarte por generación ya lo prueba 3.1);
   - página quieta 5 minutos;
   - cambiar de ficha antes de la respuesta;
@@ -108,7 +108,7 @@
   - el enlace cambia con la ficha.
 
   Verificar que pasan.
-- [ ] 5.2 Añadir los escenarios de «Cómo llegar» sin la ubicación de quien busca: sin la ubicación, sin el punto pinchado, sin peticiones hasta pulsar, y la pulsación con `intercept_directions()` y `context.expect_page()`. La pulsación comprueba que se navega exactamente a la URL, que no hay `Referer` (con `all_headers()`) y que la ficha sigue abierta. Si WebKit emulado no abre la pestaña, en el iPhone se comprueban solo `href`, `target` y `rel`, y la pulsación con la dirección de Apple Maps se prueba en `desktop` con `UA_MAC_SAFARI` (nota del escenario). Modificar (0.1) `test_requests_while_using_the_page`: pulsa "1003" y añade el escenario «Pulsar «Cómo llegar»» de `map-view`. Verificar que pasan y que la guarda no anota nada bloqueado.
+- [ ] 5.2 Añadir los escenarios de «Cómo llegar» sin la ubicación de quien busca: sin la ubicación, sin el punto pinchado, sin peticiones hasta pulsar, y la pulsación con `intercept_directions()` y `context.expect_page()`. La pulsación comprueba que se navega exactamente a la URL, que no hay `Referer` (con `all_headers()`) y que la ficha sigue abierta. Si WebKit emulado no abre la pestaña, en el iPhone se comprueban solo `href`, `target` y `rel`, y la pulsación con la dirección de Apple Maps se prueba en `desktop` con `UA_MAC_SAFARI` (nota del escenario). Modificar (0.1) `test_requests_while_using_the_page`: pulsa "1003" y añade el escenario «Pulsar «Cómo llegar»» de `map-view`, con el mismo plan B (nota del escenario de `map-view`). Verificar que pasan y que la guarda no anota nada bloqueado.
 
 ## 6. Mobile first, accesibilidad y estilos
 
@@ -136,7 +136,7 @@
   - ficha cargada sin horario ni precios;
   - reabrir una ficha ya cargada («Ficha cargada» desde el principio, sin pedir nada);
   - error anunciado;
-  - orden con el tabulador en escritorio, con salida de la ficha;
+  - orden con el tabulador en escritorio, con salida de la ficha, usando un error con «Reintentar» activo (red caída; con un 503 y `Retry-After` el botón está desactivado y no recibe el foco);
   - foco tras «Reintentar»;
   - nombres accesibles en iPhone, Pixel 7 y escritorio con `UA_LINUX_CHROME`;
   - «Buscado» en el contenido visible y en el árbol de accesibilidad de la lista de precios (`aria_snapshot()`), sin `aria-hidden`.

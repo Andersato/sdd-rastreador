@@ -23,6 +23,12 @@ enlace «Cómo llegar» de `station-detail`, solo cuando se pulsa.
 - **WHEN** en el escenario anterior se pulsa «Cómo llegar» en la ficha de "1003", con la navegación interceptada y cancelada por el test
 - **THEN** la única petición nueva a otro origen es la navegación de una pestaña nueva a la dirección del enlace (`maps.apple.com`, `www.google.com/maps` o `www.openstreetmap.org/directions`), y la página del mapa no pide nada más
 
+Nota de verificación: como en el escenario «Pulsar «Cómo llegar»» de
+`station-detail`, si el iPhone emulado en WebKit no abre la pestaña nueva al
+pulsar, en el iPhone se comprueban solo los atributos del enlace y la
+pulsación se comprueba en escritorio en Chromium con un agente de usuario de
+Safari en Mac.
+
 #### Scenario: Licencia de Leaflet
 - **WHEN** se revisa la carpeta de Leaflet en `web/`
 - **THEN** contiene su archivo de licencia y un archivo que indica la versión exacta incluida, y la página no usa otra copia de Leaflet

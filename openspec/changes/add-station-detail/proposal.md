@@ -182,6 +182,12 @@ Este cambio no toca la API ni la base de datos: solo lee
     `test_no_api_word_in_page_texts` y `test_rotate_with_detail_open`
     (`test_web_accessibility.py`); y `test_ios_simulator`
     (`test_web_readme.py`).
+23. El plan B de la decisión 21 vale también para el escenario «Pulsar
+    «Cómo llegar»» de `map-view`.
+24. «Se olvidan los detalles al lanzarse la búsqueda de la ubicación» se
+    prueba con «Volver a mi ubicación»: con el código actual, la ubicación
+    solo busca sola si aún no se ha pinchado, y entonces no hay ficha
+    abierta.
 
 ## Pendiente para design.md
 

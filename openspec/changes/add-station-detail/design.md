@@ -176,7 +176,8 @@ enlace existe desde que se abre la ficha, aunque el detalle falle.
   la respuesta.
 - `open(station)`:
   - Si ya hay entrada para ese `id`, la devuelve tal cual y no pide nada.
-  - Si el `id` no cumple `isText()` de `logic.js` (texto con algo más que
+  - Si el `id` no cumple `isText()` de `logic.js` (que pasa a exportarse;
+    hoy es privada) (texto con algo más que
     espacios: falla con `""`, `"  "` o un número; las estaciones sin `id` ya
     las descarta `validStations`), crea una entrada `error` de tipo
     `unexpected` con `retryable: false`, sin petición.
@@ -211,7 +212,7 @@ de `main.js`:
 
 | Clasificación | Texto |
 |---|---|
-| `busy` | `MESSAGES.busy`, con los segundos de `Retry-After` |
+| `busy` | `MESSAGES.busy` (solo el texto; los segundos de `Retry-After` van a `retryAt` y al temporizador del botón) |
 | `no_data` | `noDataText(message)` |
 | `unreachable` | `MESSAGES.unreachable` |
 | `server_error`, `unknown_fuel`, `outside_spain` | `MESSAGES.server_error` (otros errores JSON que no son 503, incluido el 404 `estacion_no_encontrada`) |
@@ -480,6 +481,28 @@ captura.
   un segundo `tap()` esperaría a un botón que ya no está.
 - Quién hace qué con el enlace: `main.js` lo calcula en `select()` (D7) y
   `view.js` solo lo pinta.
+
+### Observaciones para la implementación
+
+Notas menores de la última revisión, que no cambian el comportamiento:
+
+- `parseDetail` usa `isText()` también para `slug`, `name` y `unit`, así que
+  descarta los que solo tienen espacios. La spec dice «como texto» y no lo
+  contradice.
+- Seis tests de `map-view` que no están en la lista de 0.1 abren la ficha
+  sin respuesta fija para el detalle:
+  - en `test_web_search.py`: `test_detail_as_bottom_sheet_on_mobile`,
+    `test_detail_with_long_texts_in_landscape`,
+    `test_detail_in_the_side_panel_on_desktop` y `test_empty_data_in_detail`;
+  - en `test_web_accessibility.py`: `test_everything_with_taps` y
+    `test_touch_target_of_retry`.
+
+  Con este cambio recibirán un 503 `sin_base` del servidor de prueba solo en
+  la ficha. Deberían seguir pasando, porque D10 vuelve a encuadrar el
+  marcador y la fila de acciones es fija. El más delicado es
+  `test_detail_as_bottom_sheet_on_mobile` (`in_visible_zone` mientras llega
+  el error). Si alguno falla, no se modifica: se pregunta al usuario, según
+  0.1 y CLAUDE.md.
 
 ### D12. README
 
