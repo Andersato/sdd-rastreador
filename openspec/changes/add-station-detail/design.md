@@ -86,7 +86,7 @@ elemento de bloque con `overflow-wrap: anywhere`. No hay ninguna otra
 transformación, porque así se decidió con los datos del 18/10/2026: « y »
 no se parte y las abreviaturas no se traducen.
 
-### D3. Respuesta del detalle: `parseDetail(body, id)`
+### D3. Respuesta del detalle: `parseDetail(body, id, fuelSlug)`
 
 Devuelve `{ok: true, lines, prices, capture}` o `{ok: false}`. Este último
 caso se pinta como «El servidor ha dado una respuesta inesperada». Se
@@ -100,7 +100,8 @@ comprueba, en este orden:
 5. Si la lista tenía elementos pero ninguno es válido, la respuesta es
    inesperada. Una lista vacía es válida: la ficha dice «No hay precios…».
 
-`prices` sale ya ordenada con `orderPrices(prices, fuelSlug)`:
+`prices` sale ya ordenada con `orderPrices(prices, fuelSlug)`, donde
+`fuelSlug` es el combustible de la búsqueda (D6):
 - primero el elemento con `slug === fuelSlug`, marcado con `searched: true`
   (si hay varios con ese `slug`, solo el primero);
 - después los demás, en el orden recibido.
@@ -166,14 +167,18 @@ enlace existe desde que se abre la ficha, aunque el detalle falle.
 - Un número de generación.
 
 **Operaciones.**
-- `reset()`: aborta el controlador, crea otro, vacía el `Map` y suma 1 a la
-  generación. Lo llama `clearStations()` de `main.js`, que se ejecuta al
-  lanzar cualquier búsqueda (también la que provoca la ubicación) y en
+- `reset(fuelSlug)`: aborta el controlador, crea otro, vacía el `Map`, suma
+  1 a la generación y guarda `fuelSlug`, el combustible de la búsqueda que
+  empieza, que se usa en `parseDetail` al llegar cada respuesta (una
+  búsqueda tiene un solo combustible). Lo llama `clearStations()` de `main.js` con el combustible
+  elegido, y se ejecuta al lanzar cualquier búsqueda (también la que provoca la ubicación) y en
   todos sus errores. Así se cumple «se olvidan al lanzarse», no al recibir
   la respuesta.
-- `open(station, fuelSlug)`:
+- `open(station)`:
   - Si ya hay entrada para ese `id`, la devuelve tal cual y no pide nada.
-  - Si el `id` no es texto no vacío, crea una entrada `error` de tipo
+  - Si el `id` no cumple `isText()` de `logic.js` (texto con algo más que
+    espacios: falla con `""`, `"  "` o un número; las estaciones sin `id` ya
+    las descarta `validStations`), crea una entrada `error` de tipo
     `unexpected` con `retryable: false`, sin petición.
   - Si no, crea la entrada en `loading` y lanza
     `fetchOne('/api/stations/' + encodeURIComponent(id), signal)`.
@@ -183,9 +188,15 @@ enlace existe desde que se abre la ficha, aunque el detalle falle.
 - Al llegar una respuesta:
   - si su generación ya no es la actual, o el resultado es `aborted`, se
     ignora;
-  - si no, se actualiza la entrada (con `parseDetail` si es `ok`; con
-    `retryAt = now() + seconds * 1000` si es `busy`) y se llama a
-    `onChange(id)`.
+  - si no, se actualiza la entrada y se llama a `onChange(id)`:
+    - `ok` y `parseDetail(body, id, fuelSlug)` da `{ok: true, …}` →
+      `status: 'ok'` con ese resultado;
+    - `ok` pero `parseDetail` da `{ok: false}` (otro `id`, `prices` que no es
+      lista o ningún precio válido) → `status: 'error'`, `result: {kind:
+      'unexpected'}`, reintentable, que `errorText` traduce a
+      `MESSAGES.unexpected`;
+    - `busy` → `status: 'error'` con `retryAt = now() + seconds * 1000`;
+    - cualquier otro → `status: 'error'` con su clasificación, reintentable.
 
 **Cambiar de ficha no aborta.** La respuesta de la ficha anterior completa
 su entrada y no se pinta, porque `main.js` solo pinta si `id` es la ficha
@@ -207,7 +218,10 @@ de `main.js`:
 | `unexpected` | `MESSAGES.unexpected` |
 
 Una función `errorText(result)` en `view.js` reúne esta traducción. `fail()`
-pasa a usarla, sin cambiar ningún texto.
+pasa a usarla. Única diferencia con hoy: `outside_spain` pasa de
+`unexpected` (el `default` de `fail()`) a `server_error`. No se ve en la
+página, porque `showResult()` trata `outside_spain` antes de llamar a
+`fail()`; para el detalle es un 422 JSON que no es 503, como pide la spec.
 
 *Alternativa descartada:* abortar la petición al cambiar de ficha. Obligaría
 a pedirla otra vez al reabrir y rompería «como mucho una petición por
@@ -216,7 +230,7 @@ gasolinera y búsqueda».
 ### D7. Conexión en `main.js`
 
 - `select(id, source)`:
-  - tras `view.openDetail(…)`, llama a `detail.open(station, state.fuel)` y
+  - tras `view.openDetail(…)`, llama a `detail.open(station)` y
     pinta la entrada con `view.renderDetail(entry, …)`;
   - el enlace se pinta con `directionsLink(mapsProvider(navigator.userAgent),
     station.latitude, station.longitude)`.
@@ -225,7 +239,7 @@ gasolinera y búsqueda».
 - «Reintentar» del detalle: llama a `detail.retry(state.selected)`, pinta
   la entrada (otra vez «Cargando horario…») y mueve el foco a la zona de
   estado.
-- `clearStations()` llama a `detail.reset()`.
+- `clearStations()` llama a `detail.reset(state.fuel)`.
 - `state.searchCapture` guarda `result.body.capture` de la última búsqueda
   correcta.
 - Al cerrar la ficha se cancela el temporizador del «Reintentar» del
@@ -240,7 +254,8 @@ Estructura de `#detail`:
 ```
 #detail
   #detail-body            (con scroll)
-    datos de la búsqueda   (como hoy: rótulo, dirección, municipio, precio, distancia)
+    #detail-head           datos de la búsqueda (como hoy: rótulo, dirección,
+                           municipio, precio, distancia)
     #detail-status         role="status", aria-live="polite", tabindex="-1"
     #detail-retry          botón «Reintentar» (oculto si no hay error reintentable)
     #detail-info           aviso de captura, horario (lista) y precios (lista)
@@ -248,6 +263,12 @@ Estructura de `#detail`:
     #detail-close          «Cerrar»
     #detail-directions     <a target="_blank" rel="noopener noreferrer"> «Cómo llegar»
 ```
+
+`view.openDetail` y `view.closeDetail` dejan de vaciar `#detail-body` y
+solo reemplazan `#detail-head`. `#detail-status`, `#detail-retry` y
+`#detail-info` son fijos en `index.html` y se rellenan con `renderDetail`;
+al cerrar se vacían su texto y sus listas, sin quitarlos del DOM, para que
+el foco que se lleva a `#detail-status` no se pierda.
 
 **Zona de estado.** Solo lleva el texto corto:
 - «Cargando horario…» mientras carga;
@@ -257,7 +278,15 @@ Estructura de `#detail`:
 
 Va siempre visible y con estilo discreto. Puede recibir el foco tras
 «Reintentar» y por eso no se oculta visualmente: así el foco nunca queda
-en un elemento invisible.
+en un elemento invisible. El foco se mueve a ella al pulsar «Reintentar»
+con teclado, ratón o dedo, igual que la zona de estado general de
+`map-view`. Para que los lectores anuncien el estado aunque la ficha acabe
+de mostrarse, el texto de la zona de estado se pone en el siguiente
+`requestAnimationFrame` tras hacer visible la ficha. Ese callback pinta el
+estado *actual* de la entrada (no un texto fijado antes), así que una
+respuesta que llega antes del frame no queda tapada por un «Cargando
+horario…» viejo. Cada pintado nuevo y `closeDetail` cancelan el frame
+pendiente, como el temporizador de «Reintentar».
 
 **Zona de información.** Fuera de la zona viva, para que el lector no lea
 todo de golpe:
@@ -266,7 +295,10 @@ todo de golpe:
 - precios como `<ul>`. Cada `<li>` lleva «Nombre · 1,529 €/l» y, si es el
   buscado, un `<span class="searched-tag">Buscado</span>` al final y la
   clase `searched`, de modo que el texto «Buscado» es visible y forma parte
-  del contenido accesible;
+  del texto que leen los lectores (sin `aria-hidden` ni `aria-label` que lo
+  sustituya). Un `<li>` no tiene nombre accesible propio, así que el test lo
+  comprueba con la instantánea del árbol de accesibilidad
+  (`locator.aria_snapshot()`) de la lista de precios;
 - con `prices` vacía, «No hay precios de esta gasolinera en la última
   captura»;
 - el aviso de captura más reciente, encima del horario.
@@ -359,7 +391,10 @@ técnica que `test_web_logic.py`: `import('/js/logic.js')` y
 - `station_4375_empty.json`: `schedule` `null` y `prices` `[]`;
 - `station_1001.json`, `station_1002.json` y `station_1003.json`, con
   horarios distintos;
-- `station_not_found.json`: 404 `estacion_no_encontrada`.
+- `station_not_found.json`: 404 `estacion_no_encontrada` con un mensaje que
+  incluye «4375». El `not_found_404.json` que ya existe es un 404
+  `no_encontrado` de ruta inexistente; no sirve para el escenario
+  «Gasolinera no encontrada».
 
 Los errores reutilizan las respuestas que ya existen (`busy_base_retry_5`,
 `busy_api_retry_12`, `busy_base_retry_abc`, `long_query`, `no_captures`,
@@ -390,7 +425,10 @@ descriptor.
 Al registrarse después de la guarda tiene prioridad sobre ella (Playwright
 prueba primero la ruta más reciente). Va en el contexto y no en la página
 porque `target="_blank"` abre otra página del mismo contexto, y el test la
-espera con `context.expect_page()`. En Chromium, `--host-resolver-rules`
+espera con `context.expect_page()`. Si el iPhone emulado en WebKit no abre
+la pestaña nueva, el test del iPhone comprueba solo `href`, `target` y `rel`,
+y la pulsación con la dirección de Apple Maps se prueba en `desktop`
+(Chromium) con `UA_MAC_SAFARI`, como dice la nota del escenario. En Chromium, `--host-resolver-rules`
 impide además cualquier resolución de DNS. Los tests que no pulsan el
 enlace no registran esta ruta, así que cualquier petición a esos dominios
 sigue haciéndolos fallar («Sin peticiones hasta pulsar»).
@@ -399,31 +437,49 @@ sigue haciéndolos fallar («Sin peticiones hasta pulsar»).
 `Horario` «L-D: 24H» y los dos precios del escenario «Estación con precios»
 de `prices-api`, abre su ficha y comprueba el horario y los precios.
 
-**Tests de `map-view` que cambian con la spec** (requieren la autorización
-del usuario, como en `add-map-view`):
+**Tests de `map-view` que cambian con la spec** (autorizados por el usuario
+el 18/10/2026; cada cambio va en la tarea que provoca el fallo):
 - `tests/functional/test_web_search.py::test_open_and_see_details`:
   «Abrir y ver la ficha» pasa a esperar una petición `/api/stations/{id}`
   por cada una de las tres fichas.
-- `test_web_search.py`, test de «Ficha completa» (línea 573 aprox.): deja
+- `test_web_search.py::test_full_detail`: deja
   de exigir «ninguna petición» y comprueba que los datos de la búsqueda se
   ven antes de que llegue el detalle (con `hold=True`).
 - `test_web_search.py::test_tap_on_a_station_marker`: la única petición es
   `/api/stations/1001`.
-- `test_web_search.py`, test de «Peticiones al usar la página» (línea 712
-  aprox.): pulsa "1003" y añade el escenario «Pulsar «Cómo llegar»».
-- El test de «Objetivos táctiles» de `test_web_accessibility.py` añade
-  «Cómo llegar» y el «Reintentar» del detalle.
-- El test de «Textos de la página sin la palabra API» quita hoy
-  `#detail-body` del texto recogido. Pasa a quitar solo los datos de la
-  gasolinera (`#detail-info` y la cabecera con los datos de la búsqueda) y
-  a recorrer también los estados de la ficha.
-- `test_web_readme.py`: comprueba la privacidad de «Cómo llegar» y la línea
-  del Simulador.
+- `test_web_search.py::test_requests_while_using_the_page`: pulsa "1003" y
+  añade el escenario «Pulsar «Cómo llegar»».
+- `test_web_accessibility.py::test_touch_targets` y su función de apoyo
+  `touch_targets`, que hoy no mide enlaces: añaden «Cómo llegar» y el
+  «Reintentar» del detalle.
+- `test_web_accessibility.py::test_rotate_with_detail_open`: espera a que
+  llegue el detalle antes de contar peticiones, para no fallar según cuándo
+  se registre la del detalle.
+- `test_web_accessibility.py::test_no_api_word_in_page_texts` quita hoy
+  `#detail-body` del texto recogido. Pasa a quitar solo lo que llega del
+  servidor: `#detail-head`, los tramos del horario y los nombres y precios
+  de la lista de precios. Conserva los textos propios de la página: los
+  encabezados «Horario» y «Precios», «Horario no disponible», «No hay
+  precios de esta gasolinera en la última captura», «Buscado», el aviso de
+  captura, `#detail-status`, `#detail-retry` y el `aria-label` de «Cómo
+  llegar». Recorre también los estados de la ficha.
+- `test_web_readme.py::test_ios_simulator`: la línea del Simulador con la
+  ficha completa. La privacidad de «Cómo llegar» es un test nuevo.
 
 **Determinismo.** `page.clock` controla los 15 s, `Retry-After` y la
 reapertura a los 2 s; `hold=True` controla el orden de llegada de las
 respuestas en las carreras; y la zona horaria es `UTC` en los escenarios de
 captura.
+- `page.clock` también falsea `requestAnimationFrame`: con el reloj en pausa
+  hay que avanzar al menos 16 ms tras abrir la ficha para ver el texto de la
+  zona de estado (D8).
+- La ausencia de `Referer` se comprueba con `route.request.all_headers()`,
+  no con `request.headers`, que omite algunas cabeceras.
+- El doble toque de «Reintentar» se lanza con dos `dispatchEvent('click')`
+  seguidos dentro del mismo `evaluate`: tras el primero el botón se oculta y
+  un segundo `tap()` esperaría a un botón que ya no está.
+- Quién hace qué con el enlace: `main.js` lo calcula en `select()` (D7) y
+  `view.js` solo lo pinta.
 
 ### D12. README
 
@@ -459,8 +515,12 @@ En la sección de la web:
   nueva de otra manera que Chromium. → La ruta interceptada está en el
   contexto y el test espera la página nueva con `expect_page()`. Si WebKit
   no la abre en el emulador, el test del iPhone comprueba `href`, `target` y
-  `rel`, y la pulsación se comprueba en Pixel 7 y escritorio. Se documenta
-  en el test.
+  `rel`, y la pulsación con la dirección de Apple Maps se comprueba en
+  escritorio con `UA_MAC_SAFARI` (nota del escenario «Pulsar «Cómo
+  llegar»»). Se documenta en el test.
+- **[Límite conocido]** Una estación con `id` «nearby» pediría
+  `/api/stations/nearby`, la ruta de cercanas. Los identificadores del
+  Ministerio son numéricos, así que no se trata.
 - **[Riesgo]** Que otro test abra fichas sin respuesta fija y el detalle
   vaya al servidor de prueba sin base. → Da un 503 `sin_base` que solo
   afecta a la ficha y no hace fallar la guarda (es del propio origen).

@@ -34,7 +34,7 @@ distancia siguen siendo los de la búsqueda.
 - **THEN** se pide `/api/stations/12%2F3%3Fx`, codificado como un solo segmento de la ruta
 
 #### Scenario: Gasolinera de la búsqueda sin identificador válido
-- **WHEN** se abre la ficha de una gasolinera de la búsqueda cuyo `id` es `null`, `""` o el número `4375`
+- **WHEN** se abre la ficha de una gasolinera de la búsqueda cuyo `id` es `""` o el número `4375`
 - **THEN** no se pide ningún `/api/stations/…`, la zona del horario muestra «El servidor ha dado una respuesta inesperada» sin «Reintentar», y los datos de la búsqueda y «Cómo llegar» se ven con normalidad
 
 ### Requirement: Horario tal como lo publica el Ministerio
@@ -94,7 +94,7 @@ de la búsqueda. Se ignoran los elementos sin `slug`, `name` o
 
 #### Scenario: Destacado sin depender del color
 - **WHEN** se revisa la ficha anterior
-- **THEN** el elemento de Gasolina 95 E5 es el primero de la lista y contiene el texto «Buscado» en su contenido visible y en su nombre accesible, y ningún otro elemento lo contiene
+- **THEN** el elemento de Gasolina 95 E5 es el primero de la lista y contiene el texto «Buscado» en su contenido visible y en el texto que leen los lectores de pantalla (en el árbol de accesibilidad, sin `aria-hidden`), y ningún otro elemento lo contiene
 
 #### Scenario: Sin precios
 - **WHEN** el detalle trae `"prices": []`
@@ -340,6 +340,12 @@ Google u OpenStreetMap (fuera de las teselas) hasta que se pulsa.
 #### Scenario: Pulsar «Cómo llegar»
 - **WHEN** en el iPhone se pulsa «Cómo llegar» en la ficha de "1003", con la navegación a `maps.apple.com` interceptada y cancelada por el test
 - **THEN** se intenta abrir exactamente `https://maps.apple.com/?daddr=40.44,-3.73` en una pestaña nueva, sin cabecera `Referer`, y la página del mapa sigue igual, con la ficha abierta
+
+Nota de verificación: si el iPhone emulado en WebKit no abre la pestaña nueva
+al pulsar, en el iPhone se comprueban solo los atributos del enlace (`href`
+exacto, `target="_blank"` y `rel="noopener noreferrer"`) y la pulsación se
+comprueba en escritorio en Chromium con un agente de usuario de Safari en Mac,
+que genera la misma dirección de Apple Maps.
 
 #### Scenario: Sin peticiones hasta pulsar
 - **WHEN** se abren y cierran fichas sin pulsar «Cómo llegar», registrando las peticiones

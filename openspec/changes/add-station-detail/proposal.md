@@ -117,7 +117,7 @@ Este cambio no toca la API ni la base de datos: solo lee
    del mismo día y no parte el tramo. No se traducen abreviaturas ni se
    reordena nada.
 2. El combustible buscado va el primero en la lista de precios, con el texto
-   «Buscado»; los demás, en el orden del servidor (por identificador).
+   «Buscado»; los demás, en el orden del servidor (por `slug`).
 3. La ficha mantiene rótulo, dirección, municipio, precio y distancia de la
    búsqueda; del detalle solo se añaden horario y precios.
 4. Si se abre otra ficha antes de que llegue la respuesta, la petición
@@ -146,8 +146,9 @@ Este cambio no toca la API ni la base de datos: solo lee
     con «Reintentar», sin avisar de descartados (`prices` vacía sigue
     diciendo «No hay precios…»).
 12. Identificador: `data.id` debe ser texto e igual al pedido; si no,
-    respuesta inesperada. Una gasolinera de la búsqueda sin `id` de texto no
-    vacío no pide nada y muestra respuesta inesperada sin «Reintentar».
+    respuesta inesperada. Una gasolinera de la búsqueda con `id` `""` o
+    numérico no pide nada y muestra respuesta inesperada sin «Reintentar»
+    (las que no tienen `id` ya las descarta la lista de `map-view`).
 13. Foco: la ficha no atrapa el foco; orden «Reintentar» → «Cerrar» →
     «Cómo llegar»; tras «Reintentar» del detalle, el foco va a la zona de
     estado del detalle.
@@ -166,12 +167,24 @@ Este cambio no toca la API ni la base de datos: solo lee
     aviso de captura.
 19. El requisito «Ficha sencilla de la gasolinera» de `map-view` pasa a
     llamarse «Ficha de la gasolinera».
+20. «Buscado» va en el contenido visible y en el texto que leen los
+    lectores de pantalla; se comprueba con el árbol de accesibilidad, sin
+    `aria-label` que repita el texto.
+21. Si el iPhone emulado en WebKit no abre la pestaña al pulsar «Cómo
+    llegar», la pulsación con la dirección de Apple Maps se comprueba en
+    escritorio con un agente de usuario de Mac; en el iPhone, solo los
+    atributos del enlace.
+22. El usuario autoriza modificar ocho tests de `map-view` cuyos escenarios
+    cambian con este cambio: `test_open_and_see_details`,
+    `test_full_detail`, `test_tap_on_a_station_marker` y
+    `test_requests_while_using_the_page` (`test_web_search.py`);
+    `test_touch_targets` con su función de apoyo,
+    `test_no_api_word_in_page_texts` y `test_rotate_with_detail_open`
+    (`test_web_accessibility.py`); y `test_ios_simulator`
+    (`test_web_readme.py`).
 
 ## Pendiente para design.md
 
-- Encuadre del marcador cuando la ficha crece al llegar el detalle (volver a
-  encuadrar o reservar el alto de la hoja desde el principio).
-- Cómo queda la fila de acciones siempre a la vista en el panel de escritorio.
-- Qué cuenta como «fecha válida» al comparar capturas (mismo criterio que
-  «Fecha de la captura desconocida»).
-- Elemento de la zona de estado del detalle, que debe poder recibir el foco.
+Resuelto en design.md: encuadre del marcador al crecer la ficha (D10), fila
+de acciones visible en el panel de escritorio (D9), criterio de «fecha
+válida» (D4) y zona de estado del detalle que recibe el foco (D8).
