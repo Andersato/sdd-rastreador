@@ -147,9 +147,8 @@ táctil: el iPhone en WebKit (el motor de Safari) y el Android en Chromium, y
 al menos una parte en escritorio en Chromium, con la ubicación simulada y
 las teselas sustituidas por una imagen local. Los casos normales usan la API
 real con una base de prueba temporal; los errores, respuestas fijas de
-`tests/fixtures/`; el detalle de la ficha, respuestas fijas salvo un test de
-encaje. MUST NOT salir ninguna petición del equipo ni abrirse ninguna
-aplicación de mapas: la navegación de «Cómo llegar» se intercepta y se cancela.
+`tests/fixtures/`. MUST NOT salir ninguna petición del equipo ni abrirse
+ninguna aplicación de mapas.
 
 #### Scenario: Ejecución de los tests
 - **WHEN** se ejecutan todos los tests de la página registrando las peticiones del navegador

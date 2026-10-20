@@ -129,6 +129,7 @@ def test_detail_arrives(opened, device):
     assert prices(web) == ["Gasoleo A · 1,459 €/l Buscado", "Gasolina 95 E5 · 1,529 €/l"]
     assert head(web) == HEAD
     assert LOADING not in web.page.locator("#detail").inner_text()
+    assert len(web.details["4375"].calls) == 1
 
 
 def test_detail_with_different_fixed_data(opened):
@@ -359,6 +360,14 @@ def release_each(mock, order=None):
             pass
 
 
+def record_statuses(web):
+    """Anota cada texto que llega a tener la zona de estado del detalle."""
+    web.page.evaluate("""() => { window.__statuses = [];
+        const s = document.getElementById('detail-status');
+        new MutationObserver(() => window.__statuses.push(s.textContent))
+        .observe(s, {childList: true, subtree: true, characterData: true}); }""")
+
+
 def record_schedules(web):
     """Anota cada texto que llega a tener la lista del horario."""
     web.page.evaluate("""() => { window.__seen = [];
@@ -376,10 +385,14 @@ def test_reopen_same_detail(opened, device):
     wait_status(web, LOADED)
     close(web)
     expand(web)
+    record_statuses(web)
     web.press('.station-row[data-id="4375"]')
     web.page.wait_for_selector("#detail:not([hidden])")
     assert info_visible(web)  # horario y precios ya están, sin «Cargando horario…»
     wait_status(web, LOADED)
+    web.page.wait_for_timeout(100)
+    assert LOADING not in web.page.evaluate("() => window.__statuses")
+    assert LOADING not in web.page.locator("#detail").inner_text()
     assert schedule(web) == ["L-D: 24H"]
     assert len(web.details["4375"].calls) == 1
 
@@ -549,8 +562,11 @@ def test_detail_timeout(opened):
     assert status(web) == LOADING
     run(web, 2_000)  # 16 s
     wait_status(web, UNREACHABLE)
-    assert retry_visible(web)
+    assert retry_visible(web) and not retry_disabled(web)
     assert head(web) == HEAD
+    run(web, 60_000)
+    assert len(web.details["4375"].calls) == 1
+    assert status(web) == UNREACHABLE
 
 
 @pytest.mark.parametrize(("spec", "seconds"), [
@@ -569,7 +585,9 @@ def test_busy_with_retry_after(opened, spec, seconds):
     assert retry_disabled(web)
     run(web, 1_000)
     assert not retry_disabled(web)
+    run(web, 60_000)
     assert len(web.details["4375"].calls) == 1  # no se repite sola
+    assert status(web) == BUSY and not retry_disabled(web)
 
 
 def test_retry_succeeds_with_double_tap(opened):
@@ -652,15 +670,31 @@ def test_data_not_an_object(opened):
     assert retry_visible(web)
 
 
+SEARCH_NOTICES = ("count", "capture", "more", "discarded", "stale", "hint", "message",
+                  "retry", "cheapest", "legend")
+
+
+def search_notices(web):
+    """Texto y visibilidad (atributo `hidden`) de los avisos de la búsqueda."""
+    return web.page.evaluate("""(ids) => ids.map(id => {
+        const e = document.getElementById(id);
+        return [id, e.hidden, e.textContent.trim()]; })""", list(SEARCH_NOTICES))
+
+
 def test_rest_of_page_unchanged(opened):
     """Escenario: El resto de la página sigue igual."""
     web = opened("nearby_madrid", details={"1001": "network_error"})
     count = web.page.locator("#count").inner_text()
+    notices = search_notices(web)
     listed = rows(web)
     markers = web.page.eval_on_selector_all(".price-marker", "e => e.map(x => x.dataset.id)")
     open_station(web, "1001")
     wait_status(web, UNREACHABLE)
+    # Con la ficha abierta, el error solo está en ella.
+    assert web.page.locator("#message").is_hidden() and web.page.locator("#retry").is_hidden()
+    assert web.page.locator(f"text={UNREACHABLE}").count() == 1
     close(web)
+    assert search_notices(web) == notices
     assert web.page.locator("#count").inner_text() == count
     assert rows(web) == listed
     assert web.page.eval_on_selector_all(".price-marker",

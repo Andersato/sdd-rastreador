@@ -3,7 +3,9 @@
 la ficha completa»). Respuestas fijas; dispositivos de design.md D11.
 """
 
+import ast
 import re
+from pathlib import Path
 
 import pytest
 
@@ -91,9 +93,12 @@ def test_full_detail_on_small_phone(opened):
     for index in range(rows.count()):
         row = rows.nth(index)
         row.scroll_into_view_if_needed()
-        price_box = row.locator(".fuel-price").bounding_box()
-        assert price_box["x"] >= body["x"] - 0.5
-        assert price_box["x"] + price_box["width"] <= body["x"] + body["width"] + 0.5
+        for part in (row, row.locator(".fuel-name"), row.locator(".fuel-price")):
+            part_box = part.bounding_box()
+            assert part_box["x"] >= body["x"] - 0.5, (index, part_box)
+            assert part_box["x"] + part_box["width"] <= body["x"] + body["width"] + 0.5, (
+                index, part_box)
+        assert row.evaluate("e => e.scrollWidth <= e.clientWidth"), index
     for selector in ("#detail-directions", "#detail-close"):
         assert fully_in_window(web, selector), selector
     attributions_visible_and_uncovered(web)
@@ -118,6 +123,8 @@ def test_full_detail_on_android(opened):
     assert schedule(web) == ["L-D: 24H"] and len(prices(web)) == 2
     web.page.tap("#detail-close")
     web.page.wait_for_selector("#detail", state="hidden")
+    assert web.page.locator(".station-row.selected, .price-marker.selected").count() == 0
+    assert web.page.locator("#panel").is_visible()
 
 
 def test_full_detail_on_desktop(opened):
@@ -170,6 +177,24 @@ def test_safe_areas():
         '<section id="detail"'))]
     assert 'class="detail-actions"' in section and 'id="detail-directions"' in section
     assert not re.search(r"\d(\.\d+)?vh\b", CSS)
+
+
+@pytest.mark.parametrize("device", ["iphone", "iphone_landscape"])
+def test_actions_row_inside_padding(opened, device):
+    """Escenario: Zonas seguras (en el navegador: la fila de acciones va en el flujo
+    de la ficha, dentro de su relleno, que es el que lleva `env(safe-area-inset-*)`)."""
+    web = opened(details={"4375": FULL}, device=device)
+    loaded(web)
+    inside = web.page.evaluate("""() => {
+        const d = document.getElementById('detail');
+        const a = d.querySelector('.detail-actions');
+        const s = getComputedStyle(d), r = d.getBoundingClientRect(),
+              b = a.getBoundingClientRect();
+        return {position: getComputedStyle(a).position,
+                bottom: b.bottom <= r.bottom - parseFloat(s.paddingBottom) + 0.5,
+                left: b.left >= r.left + parseFloat(s.paddingLeft) - 0.5,
+                right: b.right <= r.right - parseFloat(s.paddingRight) + 0.5}; }""")
+    assert inside == {"position": "static", "bottom": True, "left": True, "right": True}
 
 
 # --- Accesibilidad de la ficha completa -----------------------------------------
@@ -262,15 +287,28 @@ def test_tab_order(opened):
 
 def test_focus_after_retry(opened):
     """Escenario: Foco tras «Reintentar» (con el teclado)."""
-    web = opened(details={"4375": ["network_error", "station_4375"]}, device="desktop",
-                 user_agent=UA_LINUX_CHROME)
+    web = opened(details={"4375": ["network_error", "station_4375"]}, hold={"4375"},
+                 device="desktop", user_agent=UA_LINUX_CHROME)
+    mock = web.details["4375"]
     open_with_keyboard(web, "4375")
+    wait_until_held(web, mock)
+    mock.release()
     wait_status(web, UNREACHABLE)
     web.page.locator("#detail-retry").focus()
     web.page.keyboard.press("Enter")
+    wait_until_held(web, mock)  # la respuesta del reintento aún no ha llegado
+    wait_status(web, LOADING)  # el texto se pone en el siguiente frame (D8)
     assert active_id(web) == "detail-status"
+    assert not web.page.locator("#detail-retry").is_visible()
+    mock.release()
     wait_status(web, LOADED)
     assert active_id(web) == "detail-status"
+    assert schedule(web) == ["L-D: 24H"]
+
+
+def wait_until_held(web, mock):
+    from tests.web_helpers import wait_until
+    wait_until(web, lambda: len(mock.held) == 1)
 
 
 @pytest.mark.parametrize(("device", "user_agent", "name"), [
@@ -301,3 +339,40 @@ def test_searched_tag_is_read(opened):
     assert all("Buscado" not in item for item in items[1:])
     assert web.page.locator("#detail-prices [aria-hidden=true]").count() == 0
     assert web.page.locator("#detail-prices li").first.inner_text().endswith("Buscado")
+
+
+# --- Dispositivos del detalle (map-view, «Pruebas sin servicios externos») --------
+
+DETAIL_TESTS = [Path(__file__).with_name(name) for name in (
+    "test_web_detail.py", "test_web_directions.py", "test_web_detail_layout.py")]
+
+
+def test_detail_devices():
+    """Escenario: Dispositivos del detalle. Los tests de `station-detail` cubren los
+    cinco dispositivos, con su motor y su ventana, y los que no traen agente de
+    usuario propio de Playwright (320×568 y escritorio) lo fijan en el test."""
+    from tests.web_fixtures import DEVICES
+
+    assert DEVICES["iphone"] == ("webkit", "iPhone 13")
+    assert DEVICES["iphone_landscape"] == ("webkit", "iPhone 13 landscape")
+    assert DEVICES["pixel"] == ("chromium", "Pixel 7")
+    assert DEVICES["small"][0] == "chromium" and DEVICES["small"][1]["viewport"] == {
+        "width": 320, "height": 568} and DEVICES["small"][1]["has_touch"] is True
+    assert DEVICES["desktop"] == ("chromium", {"viewport": {"width": 1280, "height": 800}})
+
+    used = set()
+    for path in DETAIL_TESTS:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in tree.body:
+            if not (isinstance(node, ast.FunctionDef) and node.name.startswith("test_")):
+                continue
+            code = "\n".join(ast.get_source_segment(source, part)
+                             for part in [*node.decorator_list, node])
+            devices = {d for d in DEVICES if f'"{d}"' in code}
+            used |= devices
+            if devices & {"small", "desktop"}:
+                assert "user_agent" in code, (path.name, node.name)
+    # El iPhone es el dispositivo por defecto de `opened`.
+    assert set(DEVICES) <= used | {"iphone"}
+    assert {"iphone_landscape", "pixel", "small", "desktop"} <= used

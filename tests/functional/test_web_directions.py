@@ -148,13 +148,22 @@ def test_press_directions(opened):
                  user_agent=UA_MAC_SAFARI)
     seen = web.intercept_directions()
     open_station(web, "1003")
+    wait_status(web, "Ficha cargada")
     url_before = web.page.url
+    point = web.page.evaluate("() => window.__mapView.state.point")
+    head = web.page.locator("#detail-head").inner_text()
+    requests_before = len(web.guard.requests)
     press_directions(web)
     web.page.wait_for_timeout(200)
     assert [s["url"] for s in seen] == [APPLE_1003]
     assert "referer" not in seen[0]["headers"]
+    # La página del mapa sigue igual, con la ficha abierta, y no pide nada más.
     assert web.page.url == url_before
     assert web.page.locator("#detail").is_visible()
+    assert web.page.locator("#detail-head").inner_text() == head
+    assert web.page.evaluate("() => window.__mapView.state.point") == point
+    assert [r["url"] for r in web.guard.requests[requests_before:]
+            if r["url"].startswith(web.base + "/")] == []
     assert not web.guard.blocked
 
 
