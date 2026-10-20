@@ -245,7 +245,63 @@ body.detail-open .panel { display: none; }
 
 .detail-price { font-weight: 600; }
 
-.detail-actions { flex: none; display: flex; justify-content: flex-end; }
+/* Fila de acciones fija al pie: «Cerrar» y «Cómo llegar» (add-station-detail, D9). */
+.detail-actions {
+  flex: none;
+  display: flex;
+  gap: var(--gap);
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-directions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--touch);
+  min-width: var(--touch);
+  padding: 0 16px;
+  border: 1px solid var(--cheap);
+  border-radius: 8px;
+  background: var(--cheap);
+  color: #ffffff;
+  font-weight: 600;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+/* --- detalle: estado, horario y precios -------------------------------- */
+
+.detail-status { margin: 8px 0 4px; color: var(--muted); font-size: 0.875rem; }
+
+.detail-status:focus { outline: none; }
+
+.detail-info { display: flex; flex-direction: column; gap: 4px; }
+
+.detail-heading { font-size: 0.9375rem; margin: 8px 0 0; }
+
+.detail-schedule,
+.detail-prices { list-style: none; margin: 0; padding: 0; }
+
+.detail-schedule li,
+.detail-prices li { padding: 2px 0; overflow-wrap: anywhere; }
+
+.detail-prices li { padding-left: 8px; border-left: 4px solid transparent; }
+
+.detail-prices .fuel-price { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.detail-prices .searched { font-weight: 600; border-left-color: var(--ink); background: var(--soft); }
+
+.searched-tag {
+  display: inline-block;
+  padding: 0 6px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+.detail-empty { color: var(--muted); }
 
 /* --- marcadores con el precio ------------------------------------------ */
 
@@ -299,7 +355,9 @@ body.detail-open .panel { display: none; }
     border-right: 1px solid var(--line);
   }
 
-  .detail { grid-row: 1; border-bottom: 1px solid var(--line); }
+  /* La ficha no pasa del 70 % del alto: «Cerrar» y «Cómo llegar» siempre a la
+     vista y la lista debajo, en el panel (add-station-detail, D9). */
+  .detail { grid-row: 1; border-bottom: 1px solid var(--line); max-height: 70dvh; }
 
   .panel { grid-row: 2; min-height: 0; overflow-y: auto; }
 

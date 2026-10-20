@@ -61,9 +61,24 @@
 </section>
 
 <section id="detail" class="detail" aria-label="Ficha de la gasolinera" hidden>
-  <div id="detail-body" class="detail-body"></div>
+  <div id="detail-body" class="detail-body">
+    <div id="detail-head" class="detail-head"></div>
+    <p id="detail-status" class="detail-status" role="status" aria-live="polite" tabindex="-1"></p>
+    <button type="button" id="detail-retry" class="retry detail-retry" hidden>Reintentar</button>
+    <div id="detail-info" class="detail-info" hidden>
+      <p id="detail-newer" class="note detail-newer" hidden></p>
+      <h3 class="detail-heading">Horario</h3>
+      <ul id="detail-schedule" class="detail-schedule"></ul>
+      <p id="detail-no-schedule" class="detail-empty" hidden>Horario no disponible</p>
+      <h3 class="detail-heading">Precios</h3>
+      <ul id="detail-prices" class="detail-prices"></ul>
+      <p id="detail-no-prices" class="detail-empty" hidden>No hay precios de esta gasolinera en la última captura</p>
+    </div>
+  </div>
   <div class="detail-actions">
     <button type="button" id="detail-close" class="detail-close">Cerrar</button>
+    <a id="detail-directions" class="detail-directions" target="_blank"
+       rel="noopener noreferrer">Cómo llegar</a>
   </div>
 </section>
 

@@ -11,9 +11,9 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 
 from tests.web_fixtures import fixture_response, fulfill_args
-from tests.web_helpers import (BARCELONA, MADRID, circle_in_view, click_map, in_visible_zone,
-                               nearby_calls, point_and_circle, seed_madrid, station_markers, text,
-                               wait_until)
+from tests.web_helpers import (BARCELONA, MADRID, UA_MAC_SAFARI, circle_in_view, click_map,
+                               in_visible_zone, nearby_calls, point_and_circle, seed_madrid,
+                               station_markers, text, wait_until)
 
 pytestmark = pytest.mark.browser
 
@@ -109,15 +109,19 @@ def test_quiet_page(open_page, seeded):
 
 @pytest.mark.parametrize("device", ["iphone", "pixel"])
 def test_open_and_see_details(open_page, seeded, device):
-    """Escenario: Abrir y ver la ficha (una petición de cada y ninguna a la ficha)."""
+    """Escenario: Abrir y ver la ficha (una petición de cada y una de detalle por
+    ficha; cambia con add-station-detail, autorizado en su tarea 0.1)."""
     web = open_page(device=device, geo=GRANT, clock=False)
     wait_results(web)
     for station_id in ("1003", "1001", "1002"):
         tap_marker(web, station_id)
         web.page.wait_for_selector("#detail:not([hidden])")
+        web.page.wait_for_function(
+            "() => document.getElementById('detail-status').textContent === 'Ficha cargada'")
         web.press("#detail-close")
     calls = [urlsplit(r["url"]).path for r in web.guard.requests if "/api/" in r["url"]]
-    assert sorted(calls) == ["/api/fuels", "/api/health", "/api/stations/nearby"]
+    assert sorted(calls) == ["/api/fuels", "/api/health", "/api/stations/1001",
+                             "/api/stations/1002", "/api/stations/1003", "/api/stations/nearby"]
 
 
 def test_two_clicks_in_a_row(open_page, seeded):
@@ -570,16 +574,22 @@ def test_new_search_clears_selection(mocked, action, device):
 # --- Ficha sencilla -----------------------------------------------------------------
 
 def test_full_detail(mocked):
-    """Escenario: Ficha completa (sin peticiones)."""
+    """Escenario: Ficha completa (los datos de la búsqueda se ven enseguida, antes
+    de que llegue el detalle; cambia con add-station-detail, autorizado en su
+    tarea 0.1)."""
     web = mocked("nearby_detail")
-    before = len(web.guard.requests)
+    detail = web.mock("/api/stations/4375", "station_4375", hold=True)
     tap_marker(web, "4375")
     web.page.wait_for_selector("#detail:not([hidden])")
-    lines = web.page.locator("#detail-body").inner_text().split("\n")
+    lines = web.page.locator("#detail-head").inner_text().split("\n")
     assert [line for line in lines if line] == ["REPSOL", "CALLE MAYOR, 1", "Madrid", "1,459 €/l",
                                                 "0,0 km"]
-    web.page.wait_for_timeout(300)
-    assert len(web.guard.requests) == before
+    assert len(detail.calls) == 1 and detail.held  # el detalle aún no ha llegado
+    detail.release()
+    web.page.wait_for_selector("#detail-info:not([hidden])")
+    lines = web.page.locator("#detail-head").inner_text().split("\n")
+    assert [line for line in lines if line] == ["REPSOL", "CALLE MAYOR, 1", "Madrid", "1,459 €/l",
+                                                "0,0 km"]
 
 
 def test_detail_as_bottom_sheet_on_mobile(mocked):
@@ -709,7 +719,11 @@ MINISTRY = ("Ministerio de Industria, Comercio y Turismo - Precios de carburante
 
 
 def test_requests_while_using_the_page(open_page, seeded):
-    """Escenario: Peticiones al usar la página (ubicación, búsqueda y una ficha)."""
+    """Escenario: Peticiones al usar la página (ubicación, búsqueda y la ficha de
+    "1003", sin pulsar «Cómo llegar»). Con add-station-detail, la ficha pide su
+    detalle al propio origen y el escenario «Pulsar «Cómo llegar»» se comprueba,
+    en el iPhone, con los atributos del enlace (nota del escenario; autorizado en
+    su tarea 0.1)."""
     web = open_page(geo=GRANT, clock=False)
     wait_results(web)
     tap_marker(web, "1003")
@@ -717,6 +731,30 @@ def test_requests_while_using_the_page(open_page, seeded):
     web.page.wait_for_load_state("networkidle")
     for request in web.guard.requests:
         assert request["url"].startswith(web.base + "/") or TILE_URL.match(request["url"])
+    directions = web.page.locator("#detail-directions")
+    assert directions.get_attribute("href") == "https://maps.apple.com/?daddr=40.44,-3.73"
+    assert directions.get_attribute("target") == "_blank"
+    assert directions.get_attribute("rel") == "noopener noreferrer"
+
+
+def test_press_directions_is_the_only_outside_request(open_page, seeded):
+    """Escenario: Pulsar «Cómo llegar» (plan B de la nota: escritorio en Chromium con
+    agente de Safari en Mac; la navegación se intercepta y se cancela)."""
+    web = open_page(geo=GRANT, clock=False, device="desktop", user_agent=UA_MAC_SAFARI)
+    wait_results(web)
+    seen = web.intercept_directions()
+    tap_marker(web, "1003")
+    web.page.wait_for_selector("#detail:not([hidden])")
+    web.page.wait_for_load_state("networkidle")
+    before = len(web.guard.requests)
+    with web.page.context.expect_page(timeout=5_000):
+        web.page.click("#detail-directions")
+    web.page.wait_for_timeout(300)
+    outside = [r["url"] for r in web.guard.requests[before:]
+               if not r["url"].startswith(web.base + "/") and not TILE_URL.match(r["url"])]
+    assert outside == ["https://maps.apple.com/?daddr=40.44,-3.73"]
+    assert [s["url"] for s in seen] == outside
+    assert not [r for r in web.guard.requests[before:] if r["url"].startswith(web.base + "/")]
 
 
 def attributions_visible_and_uncovered(web):
@@ -778,7 +816,9 @@ def test_click_on_barcelona(open_page, seeded):
 
 
 def test_tap_on_a_station_marker(open_page, seeded):
-    """Escenario: Pinchar en un marcador de gasolinera (ficha y ninguna petición)."""
+    """Escenario: Pinchar en un marcador de gasolinera (ficha, el punto no cambia y la
+    única petición es la del detalle; cambia con add-station-detail, autorizado en
+    su tarea 0.1)."""
     web = open_page(geo=GRANT, clock=False)
     wait_results(web)
     before = len(web.guard.requests)
@@ -787,8 +827,8 @@ def test_tap_on_a_station_marker(open_page, seeded):
     web.page.wait_for_selector("#detail:not([hidden])")
     web.page.wait_for_timeout(300)
     assert web.page.evaluate("() => window.__mapView.state.point") == point
-    api = [r for r in web.guard.requests[before:] if "/api/" in r["url"]]
-    assert api == []
+    api = [urlsplit(r["url"]).path for r in web.guard.requests[before:] if "/api/" in r["url"]]
+    assert api == ["/api/stations/1001"]
 
 
 @pytest.mark.parametrize("then", ["timeout", "deny"])

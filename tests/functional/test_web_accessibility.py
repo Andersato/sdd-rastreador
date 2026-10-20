@@ -5,6 +5,9 @@ import re
 
 import pytest
 
+from tests.fixtures.web.make_web_fixtures import NEWER_CAPTURE
+from tests.fixtures.web.make_web_fixtures import detail as detail_fixture
+from tests.fixtures.web.make_web_fixtures import price as detail_price
 from tests.web_helpers import MADRID, in_visible_zone, nearby_calls, text, wait_until
 
 pytestmark = pytest.mark.browser
@@ -168,9 +171,10 @@ def test_controls_in_the_lower_half(opened, device):
 
 
 def touch_targets(web):
-    """Tamaños de los objetivos que se ven (sin tocarlos: design.md D11)."""
+    """Tamaños de los objetivos que se ven (sin tocarlos: design.md D11), también
+    los enlaces de acción como «Cómo llegar» (add-station-detail, tarea 0.1)."""
     return web.page.evaluate("""() => [...document.querySelectorAll(
-        'select, button, .leaflet-control-zoom a')].filter(e => {
+        'select, button, .leaflet-control-zoom a, a.detail-directions')].filter(e => {
             const r = e.getBoundingClientRect(); const s = getComputedStyle(e);
             return r.width > 0 && r.height > 0 && s.visibility !== 'hidden'
                 && e.offsetParent !== null; })
@@ -182,14 +186,19 @@ def touch_targets(web):
     ("small", "plegada"), ("small", "desplegada"), ("small", "ficha"),
     ("desktop", "sin ficha"), ("desktop", "ficha")])
 def test_touch_targets(opened, device, state):
-    """Escenarios: Objetivos táctiles y Excepciones (marcadores y enlace, fuera)."""
+    """Escenarios: Objetivos táctiles y Excepciones (marcadores y enlace, fuera). Con
+    la ficha, también «Cómo llegar» y el «Reintentar» del detalle (aquí el detalle
+    da error: el servidor de prueba no tiene base)."""
     web = opened(device=device)
     if state == "desplegada":
         web.press("#toggle")
     elif state == "ficha":
         click_marker(web, "1001")
+        web.page.wait_for_selector("#detail-retry:not([hidden])")
     targets = touch_targets(web)
-    assert any(name == "detail-close" for name, _, _ in targets) == (state == "ficha")
+    names = {name for name, _, _ in targets}
+    for name in ("detail-close", "detail-directions", "detail-retry"):
+        assert (name in names) == (state == "ficha"), name
     for name, width, height in targets:
         assert width >= 44 and height >= 44, (name, width, height)
 
@@ -234,6 +243,11 @@ def test_rotate_with_detail_open(opened):
     web = opened()
     web.page.locator('.price-marker[data-id="1001"] .label').tap()
     web.page.wait_for_selector("#detail:not([hidden])")
+    # Con add-station-detail la ficha pide su detalle: se espera a que llegue
+    # antes de contar (autorizado en su tarea 0.1).
+    web.page.wait_for_function(
+        "() => document.getElementById('detail-status').textContent !== ''"
+        " && document.getElementById('detail-status').textContent !== 'Cargando horario…'")
     requests = len(web.guard.requests)
     for size in ({"width": 750, "height": 342}, {"width": 390, "height": 664}):
         web.page.set_viewport_size(size)
@@ -276,17 +290,49 @@ STATES = {
     "desactualizados": dict(health="health_stale"),
 }
 
+# Estados de la ficha completa (add-station-detail, escenario «Textos sin la
+# palabra API»): se abre la ficha de "1001" con esta respuesta del detalle.
+_DETAIL = detail_fixture("1001", "L-D: 24H", [detail_price("gasoleo-a", 1.459)])
+DETAIL_STATES = {
+    "ficha cargando": None,
+    "ficha correcta": _DETAIL,
+    "ficha sin horario": detail_fixture("1001", None, [detail_price("gasoleo-a", 1.459)]),
+    "ficha sin precios": detail_fixture("1001", "L-D: 24H", []),
+    "ficha captura más reciente": detail_fixture("1001", "L-D: 24H",
+                                                 [detail_price("gasoleo-a", 1.459)],
+                                                 capture=NEWER_CAPTURE),
+    "ficha ocupada": "busy_base_retry_5",
+    "ficha consulta larga": "long_query",
+    "ficha sin datos": "no_captures",
+    "ficha caída": "network_error",
+    "ficha no JSON": "bad_gateway_html",
+    "ficha 503 no JSON": "proxy_503_html",
+    "ficha no encontrada": "station_not_found",
+    "ficha error interno": "internal_error",
+}
 
-@pytest.mark.parametrize("state", list(STATES))
+
+@pytest.mark.parametrize("state", list(STATES) + list(DETAIL_STATES))
 def test_no_api_word_in_page_texts(opened, state):
-    """Escenario: Recorrido por todos los estados."""
-    web = opened(geo={"kind": "grant", "lat": MADRID[0], "lon": MADRID[1]}, **STATES[state])
+    """Escenario: Recorrido por todos los estados (también los de la ficha
+    completa; cambia con add-station-detail, autorizado en su tarea 0.1)."""
+    on_detail = state in DETAIL_STATES
+    web = opened(geo={"kind": "grant", "lat": MADRID[0], "lon": MADRID[1]},
+                 **({} if on_detail else STATES[state]))
+    if on_detail:
+        web.mock("/api/stations/1001", DETAIL_STATES[state])
+        web.page.locator('.price-marker[data-id="1001"] .label').tap()
+        web.page.wait_for_selector("#detail:not([hidden])")
     web.page.wait_for_timeout(300)
     if web.page.locator("#toggle").is_visible():
         web.press("#toggle")
+    # Fuera solo lo que llega del servidor: filas, datos de la búsqueda en la
+    # ficha, tramos del horario y nombres y precios de los combustibles.
     own = web.page.evaluate("""() => {
         const clone = document.body.cloneNode(true);
-        clone.querySelectorAll('.station-row, #cheapest, #detail-body, script').forEach(e => e.remove());
+        clone.querySelectorAll('.station-row, #cheapest, #detail-head, #detail-schedule li, '
+            + '#detail-prices .fuel-name, #detail-prices .fuel-price, script')
+            .forEach(e => e.remove());
         const texts = [clone.innerText || clone.textContent];
         document.querySelectorAll('[title], [aria-label]').forEach(e =>
             texts.push(e.getAttribute('title') || '', e.getAttribute('aria-label') || ''));

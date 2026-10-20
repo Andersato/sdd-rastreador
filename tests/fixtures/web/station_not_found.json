@@ -1,0 +1,11 @@
+{
+ "status": 404,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "error": {
+   "code": "estacion_no_encontrada",
+   "message": "no existe la estación «4375»"
+  }
+ }
+}

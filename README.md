@@ -445,6 +445,14 @@ va en un panel a la izquierda.
   OpenStreetMap recibe, como en cualquier mapa, las peticiones de las
   teselas de la zona que se ve. El navegador solo recuerda el combustible y
   el radio elegidos.
+- **Privacidad de «Cómo llegar»:** el enlace «Cómo llegar» de la ficha de
+  una gasolinera abre la ruta en Apple Maps (iPhone, iPad y Mac), Google
+  Maps (Android) u OpenStreetMap (el resto), según el dispositivo. Solo les
+  envía las coordenadas de la gasolinera, que son un dato público, y nunca
+  tu ubicación ni el punto pinchado; tampoco la dirección de la página. Solo
+  ocurre al pulsarlo: hasta entonces la página no les pide nada. Esa
+  aplicación sí puede usar su propia ubicación para calcular la ruta, según
+  su política de privacidad.
 
 ### Probar la web en un móvil real (antes de publicarla)
 
@@ -495,8 +503,11 @@ inferior, sin publicarla: es una comprobación opcional, que no bloquea nada.
 3. Darle una ubicación: Features → Location → Custom Location (por ejemplo,
    40.4168 y -3.7038) y aceptar el permiso en Safari.
 4. Comprobar, en vertical y en horizontal (Device → Rotate Left): la hoja de
-   la lista y «Ver lista», la ficha al tocar un precio, que los controles
-   quedan abajo y que ni la muesca ni la barra inferior tapan nada.
+   la lista y «Ver lista», la ficha al tocar un precio (con su horario, los
+   precios de todos sus combustibles con el buscado marcado como «Buscado»,
+   y «Cómo llegar», que abre Apple Maps con la ruta a la gasolinera), que
+   los controles quedan abajo y que ni la muesca ni la barra inferior tapan
+   nada.
 
 ## Protección del proyecto real frente a los agentes de Claude Code
 

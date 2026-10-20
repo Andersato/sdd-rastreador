@@ -1,0 +1,37 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "id": "4375",
+   "brand": "REPSOL",
+   "address": "CALLE MAYOR, 1",
+   "municipality": "Madrid",
+   "province": "MADRID",
+   "schedule": "L-D: 24H",
+   "latitude": 40.416775,
+   "longitude": -3.70379,
+   "prices": [
+    {
+     "slug": "gasoleo-a",
+     "name": "Gasoleo A",
+     "unit": "€/l",
+     "kind": "combustible",
+     "price": 1.459
+    },
+    {
+     "slug": "gasolina-95-e5",
+     "name": "Gasolina 95 E5",
+     "unit": "€/l",
+     "kind": "combustible",
+     "price": 1.529
+    }
+   ]
+  },
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

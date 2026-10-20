@@ -1,4 +1,5 @@
-"""Genera las respuestas fijas de la API para los tests de la web (add-map-view).
+"""Genera las respuestas fijas de la API para los tests de la web (add-map-view y
+add-station-detail).
 
 Son respuestas de nuestra propia API (`prices-api`) escritas a mano a partir
 de la spec, no del Ministerio. Cada archivo tiene la forma
@@ -92,6 +93,24 @@ def many(n, start_price=1.300, step=0.001):
                     brand=f"GASOLINERA {i + 1}", lat=40.40 + (i % 10) * 0.01,
                     lon=-3.75 + (i // 10) * 0.01)
             for i in range(n)]
+
+
+NEWER_CAPTURE = {"downloaded_at": "2026-10-16T08:26:40Z",
+                 "source_date": "2026-10-16T10:26:36+02:00"}
+
+
+def price(slug, value):
+    """Un precio de la ficha de una estación, con su nombre y unidad del catálogo."""
+    name, _, unit, kind = next(c for c in CATALOG if c[1] == slug)
+    return {"slug": slug, "name": name, "unit": unit, "kind": kind, "price": value}
+
+
+def detail(sid, schedule, prices, brand="REPSOL", lat=40.416775, lon=-3.70379,
+           capture=CAPTURE):
+    """Respuesta de `GET /api/stations/{id}` (spec prices-api, «Ficha de una estación»)."""
+    return ok({"id": sid, "brand": brand, "address": "CALLE MAYOR, 1", "municipality": "Madrid",
+               "province": "MADRID", "schedule": schedule, "latitude": lat, "longitude": lon,
+               "prices": prices}, capture=capture)
 
 
 def build() -> dict:
@@ -219,6 +238,26 @@ def build() -> dict:
                                         status="configuracion_no_valida")
     files["health_busy"] = error(503, "api_ocupada", api_busy, {"Retry-After": "5"},
                                  status="error")
+    # --- ficha de una estación (add-station-detail) ------------------------
+    files["station_4375"] = detail("4375", "L-D: 24H",
+                                   [price("gasoleo-a", 1.459), price("gasolina-95-e5", 1.529)])
+    files["station_4375_newer"] = detail(
+        "4375", "L-D: 24H", [price("gasoleo-a", 1.479), price("gasolina-95-e5", 1.529)],
+        capture=NEWER_CAPTURE)
+    files["station_4375_full"] = detail(
+        "4375", "L-J: 06:00-22:30; V: 06:00-23:00; S: 06:45-23:00; D: 07:45-22:30",
+        [price("adblue", 0.899), price("gasoleo-a", 1.459), price("gasoleo-premium", 1.559),
+         price("gasolina-95-e5", 1.529), price("gasolina-98-e5", 1.689)])
+    files["station_4375_empty"] = detail("4375", None, [])
+    files["station_1001"] = detail("1001", "L-D: 24H", [price("gasoleo-a", 1.459)],
+                                   lat=40.425, lon=-3.7038)
+    files["station_1002"] = detail("1002", "L-S: 07:00-21:00", [price("gasoleo-a", 1.459)],
+                                   brand="GALP", lat=40.4168, lon=-3.68)
+    files["station_1003"] = detail("1003", "L-V: 06:00-22:00; S-D: 08:00-15:00",
+                                   [price("gasoleo-a", 1.399)], brand="CEPSA", lat=40.44,
+                                   lon=-3.73)
+    files["station_not_found"] = error(404, "estacion_no_encontrada",
+                                       "no existe la estación «4375»")
     return files
 
 

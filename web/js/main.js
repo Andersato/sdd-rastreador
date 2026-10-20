@@ -1,12 +1,14 @@
 // Arranque y estado de la página (design.md D5 y D6).
 import {createSearcher, nearbyPath, request} from './api.js';
+import {createDetailLoader} from './detail.js';
 import {
-  DEFAULT_RADIUS, RADII, captureText, discardedText, emptyText, moreText, searchPoint,
-  staleText, stationsCountText, tiers, validFuels, validStations,
+  DEFAULT_RADIUS, RADII, captureText, directionsLink, discardedText, emptyText, mapsProvider,
+  moreText, newerCaptureText, searchPoint, staleText, stationsCountText, tiers, validFuels,
+  validStations,
 } from './logic.js';
 import {createMap} from './map.js';
 import {loadPrefs, savePref} from './storage.js';
-import {MESSAGES, createView, noDataText, rowText} from './view.js';
+import {MESSAGES, createView, errorText, rowText} from './view.js';
 
 const LOCATION_WAIT_MS = 10000;
 
@@ -24,6 +26,7 @@ const state = {
   unit: '€/l',
   selected: null,
   detailSource: null, // 'row' | 'marker' | 'cheapest'
+  searchCapture: null, // `capture` de la última búsqueda correcta (add-station-detail, D4)
 };
 
 const prefs = loadPrefs();
@@ -35,7 +38,10 @@ const view = createView({
   onRow: (id) => select(id, 'row'),
   onCheapest: () => state.stations.length && select(state.stations[0].id, 'cheapest'),
   onCloseDetail: () => closeDetail(true),
+  onDetailRetry: () => retryDetail(),
 });
+// Detalles de la ficha, uno por gasolinera y búsqueda (add-station-detail, D6).
+const detail = createDetailLoader({fetchOne: request, onChange: (id) => onDetailChange(id)});
 const {fuel: fuelSelect, radius: radiusSelect, back, toggle, cheapest} = view.elements;
 const map = createMap(view.elements.map, {
   onClick: (lat, lon) => onMapClick(lat, lon),
@@ -47,28 +53,14 @@ const map = createMap(view.elements.map, {
 
 function fail(result, retry) {
   retryAction = retry;
-  switch (result.kind) {
-    case 'busy':
-      view.showMessage(MESSAGES.busy, {retryAfter: result.seconds});
-      break;
-    case 'no_data':
-      view.showMessage(noDataText(result.message));
-      break;
-    case 'unreachable':
-      view.showMessage(MESSAGES.unreachable);
-      break;
-    case 'server_error':
-    case 'unknown_fuel':
-      view.showMessage(MESSAGES.server_error);
-      break;
-    default:
-      view.showMessage(MESSAGES.unexpected);
-  }
+  view.showMessage(errorText(result), result.kind === 'busy' ? {retryAfter: result.seconds} : {});
 }
 
 // Quita los resultados; `fold` pliega la hoja (búsqueda que se queda sin lista).
 function clearStations({fold = false} = {}) {
   closeDetail(false);
+  detail.reset(state.fuel);
+  state.searchCapture = null;
   state.stations = [];
   map.clearStations();
   view.clearResults({fold});
@@ -181,6 +173,7 @@ function showStations(valid, total, received, fuel, radius, capture) {
   const colours = tiers(stations.map((s) => s.price));
   state.stations = stations;
   state.unit = unit;
+  state.searchCapture = capture;
   view.renderStations(stations, colours, unit);
   map.setStations(stations, colours);
   const prices = stations.map((s) => s.price);
@@ -282,9 +275,38 @@ function select(id, source) {
   state.detailSource = source;
   // Primero la ficha: en escritorio cambia el alto del panel antes de desplazar la lista.
   view.openDetail(station, state.unit);
+  view.setDirections(directionsLink(mapsProvider(navigator.userAgent), station.latitude,
+    station.longitude));
+  renderDetail(detail.open(station));
   view.highlight(state.selected, {scroll: source === 'marker'});
   map.select(state.selected);
   map.showMarker(state.selected);
+}
+
+// Pinta el detalle de la ficha abierta. Cuando ya tiene su alto, el marcador
+// vuelve a la zona visible (D10) y, en escritorio, la lista se desplaza otra
+// vez hasta su fila si se abrió desde el marcador: la ficha puede haber crecido.
+function renderDetail(entry) {
+  const newer = entry.status === 'ok'
+    ? newerCaptureText(state.searchCapture, entry.result.capture) : null;
+  view.renderDetail(entry, {newer, onPainted: () => {
+    if (!state.selected) return;
+    view.highlight(state.selected, {scroll: state.detailSource === 'marker'});
+    map.showMarker(state.selected);
+  }});
+}
+
+// Llega el detalle de `id`: solo se pinta si es la ficha abierta.
+function onDetailChange(id) {
+  if (state.selected !== id || !view.detailOpen()) return;
+  renderDetail(detail.get(id));
+}
+
+function retryDetail() {
+  const entry = state.selected ? detail.retry(state.selected) : null;
+  if (!entry) return;
+  renderDetail(entry);
+  view.focusDetailStatus();
 }
 
 // Cierra la ficha; con `returnFocus`, el foco vuelve a donde se abrió (D10).
@@ -357,4 +379,4 @@ loadFuels();
 requestLocation();
 
 // Para los tests y para depurar: el estado de la página y el mapa.
-window.__mapView = {state, map};
+window.__mapView = {state, map, detail};

@@ -1,0 +1,30 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "id": "1002",
+   "brand": "GALP",
+   "address": "CALLE MAYOR, 1",
+   "municipality": "Madrid",
+   "province": "MADRID",
+   "schedule": "L-S: 07:00-21:00",
+   "latitude": 40.4168,
+   "longitude": -3.68,
+   "prices": [
+    {
+     "slug": "gasoleo-a",
+     "name": "Gasoleo A",
+     "unit": "€/l",
+     "kind": "combustible",
+     "price": 1.459
+    }
+   ]
+  },
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

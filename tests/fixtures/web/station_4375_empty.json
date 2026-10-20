@@ -1,0 +1,22 @@
+{
+ "status": 200,
+ "headers": {},
+ "body": {
+  "attribution": "Ministerio de Industria, Comercio y Turismo - Precios de carburantes en estaciones de servicio",
+  "data": {
+   "id": "4375",
+   "brand": "REPSOL",
+   "address": "CALLE MAYOR, 1",
+   "municipality": "Madrid",
+   "province": "MADRID",
+   "schedule": null,
+   "latitude": 40.416775,
+   "longitude": -3.70379,
+   "prices": []
+  },
+  "capture": {
+   "downloaded_at": "2026-10-16T07:26:37Z",
+   "source_date": "2026-10-16T09:26:34+02:00"
+  }
+ }
+}

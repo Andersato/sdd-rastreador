@@ -77,11 +77,18 @@ const MADRID = new Intl.DateTimeFormat('es-ES', {
   hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 });
 
+// Instante de una fecha `YYYY-MM-DDTHH:MM:SSZ` en milisegundos, o null.
+function utcInstant(iso) {
+  if (typeof iso !== 'string' || !ISO_UTC.test(iso)) return null;
+  const time = new Date(iso).getTime();
+  return Number.isNaN(time) ? null : time;
+}
+
 // «16/10/2026 a las 09:26», o null si la fecha no es un instante UTC válido.
 export function madridDateTime(iso) {
-  if (typeof iso !== 'string' || !ISO_UTC.test(iso)) return null;
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return null;
+  const time = utcInstant(iso);
+  if (time === null) return null;
+  const date = new Date(time);
   const part = {};
   for (const {type, value} of MADRID.formatToParts(date)) part[type] = value;
   return `${part.day}/${part.month}/${part.year} a las ${part.hour}:${part.minute}`;
@@ -106,7 +113,7 @@ export function retryAfterSeconds(value) {
   return seconds >= 1 && seconds <= 60 ? seconds : DEFAULT_RETRY_SECONDS;
 }
 
-function isText(x) {
+export function isText(x) {
   return typeof x === 'string' && x.trim() !== '';
 }
 
@@ -152,4 +159,78 @@ export function moreText(total, received, radius) {
 export function emptyText(fuelName, radius) {
   const base = `No hay gasolineras con ${fuelName} a menos de ${radius} km.`;
   return radius < RADII[RADII.length - 1] ? `${base} Prueba con un radio mayor.` : base;
+}
+
+// --- ficha de una gasolinera (add-station-detail, design.md D2 a D5) ----------
+
+// Tramos del horario tal como lo publica el Ministerio: partido por «;», sin
+// espacios sobrantes ni tramos vacíos. Sin interpretar nada más.
+export function scheduleLines(schedule) {
+  if (typeof schedule !== 'string') return [];
+  return schedule.split(';').map((part) => part.trim()).filter((part) => part !== '');
+}
+
+// El combustible buscado primero (marcado `searched`), los demás en su orden.
+export function orderPrices(prices, fuelSlug) {
+  const index = prices.findIndex((p) => p.slug === fuelSlug);
+  if (index < 0) return prices.map((p) => ({...p, searched: false}));
+  const rest = prices.filter((_, i) => i !== index).map((p) => ({...p, searched: false}));
+  return [{...prices[index], searched: true}, ...rest];
+}
+
+function isPrice(p) {
+  return p && typeof p === 'object' && isText(p.slug) && isText(p.name) && isText(p.unit)
+    && isNumber(p.price) && p.price > 0;
+}
+
+// Respuesta de `/api/stations/{id}`: `{ok: true, lines, prices, capture}` o
+// `{ok: false}` si no tiene la forma esperada.
+export function parseDetail(body, id, fuelSlug) {
+  const data = body && typeof body === 'object' ? body.data : null;
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {ok: false};
+  if (typeof data.id !== 'string' || data.id !== id) return {ok: false};
+  if (!Array.isArray(data.prices)) return {ok: false};
+  const valid = data.prices.filter(isPrice);
+  if (data.prices.length > 0 && valid.length === 0) return {ok: false};
+  return {
+    ok: true,
+    lines: scheduleLines(data.schedule),
+    prices: orderPrices(valid, fuelSlug),
+    capture: body.capture && typeof body.capture === 'object' ? body.capture : null,
+  };
+}
+
+// Aviso si el detalle es de una captura posterior a la de la búsqueda.
+export function newerCaptureText(searchCapture, detailCapture) {
+  const at = (c) => utcInstant(c && typeof c === 'object' ? c.downloaded_at : null);
+  const search = at(searchCapture);
+  const detail = at(detailCapture);
+  if (search === null || detail === null || detail <= search) return null;
+  const when = madridDateTime(detailCapture.downloaded_at);
+  return `Horario y precios de una captura más reciente: del ${when} (hora de Madrid)`;
+}
+
+// Aplicación de mapas según el agente de usuario: 'google', 'apple' u 'osm'.
+export function mapsProvider(userAgent) {
+  const ua = String(userAgent || '').toLowerCase();
+  if (ua.includes('android')) return 'google';
+  if (['iphone', 'ipad', 'ipod', 'macintosh'].some((word) => ua.includes(word))) return 'apple';
+  return 'osm';
+}
+
+const MAPS_NAMES = {apple: 'Apple Maps', google: 'Google Maps', osm: 'OpenStreetMap'};
+
+// Enlace «Cómo llegar»: solo las coordenadas de la gasolinera, cada una con su
+// escritura más corta. Se monta a mano: `URLSearchParams` codificaría la coma.
+export function directionsLink(provider, lat, lon) {
+  const at = `${String(lat)},${String(lon)}`;
+  const hrefs = {
+    apple: `https://maps.apple.com/?daddr=${at}`,
+    google: `https://www.google.com/maps/dir/?api=1&destination=${at}`,
+    osm: `https://www.openstreetmap.org/directions?route=${encodeURIComponent(`;${at}`)}`,
+  };
+  return {
+    href: hrefs[provider],
+    label: `Cómo llegar con ${MAPS_NAMES[provider]} (se abre en otra pestaña)`,
+  };
 }

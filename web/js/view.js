@@ -31,13 +31,32 @@ export function noDataText(message) {
   return message ? `${base} Detalle: ${message}` : base;
 }
 
+// Texto de un error ya clasificado por `api.js` (add-station-detail, D6). Los
+// segundos de `Retry-After` no van en el texto.
+export function errorText(result) {
+  switch (result.kind) {
+    case 'busy':
+      return MESSAGES.busy;
+    case 'no_data':
+      return noDataText(result.message);
+    case 'unreachable':
+      return MESSAGES.unreachable;
+    case 'server_error':
+    case 'unknown_fuel':
+    case 'outside_spain':
+      return MESSAGES.server_error;
+    default:
+      return MESSAGES.unexpected;
+  }
+}
+
 export function rowText(station, unit) {
   return `${station.brand || 'Sin rótulo'} · ${formatDistance(station.distance_km)} · ${formatPrice(station.price, unit)}`;
 }
 
 const DESKTOP = window.matchMedia('(min-width: 1024px)');
 
-export function createView({onRetry, onRow, onCheapest, onCloseDetail}) {
+export function createView({onRetry, onRow, onCheapest, onCloseDetail, onDetailRetry}) {
   const panel = $('panel');
   const detail = $('detail');
   const retry = $('retry');
@@ -45,6 +64,11 @@ export function createView({onRetry, onRow, onCheapest, onCloseDetail}) {
   const cheapest = $('cheapest');
   const list = $('list');
   let retryTimer = null;
+  let detailRetryTimer = null;
+  let statusFrame = 0;
+  const detailStatus = $('detail-status');
+  const detailRetry = $('detail-retry');
+  const directions = $('detail-directions');
 
   retry.addEventListener('click', () => {
     if (!retry.disabled) onRetry();
@@ -55,6 +79,41 @@ export function createView({onRetry, onRow, onCheapest, onCloseDetail}) {
   });
   cheapest.addEventListener('click', () => onCheapest());
   $('detail-close').addEventListener('click', () => onCloseDetail());
+  detailRetry.addEventListener('click', () => {
+    if (!detailRetry.disabled && !detailRetry.hidden) onDetailRetry();
+  });
+
+  function cancelDetailTimers() {
+    clearTimeout(detailRetryTimer);
+    cancelAnimationFrame(statusFrame);
+  }
+
+  function listItem(className, text) {
+    const item = document.createElement('li');
+    item.className = className;
+    item.textContent = text;
+    return item;
+  }
+
+  // Precio de la ficha: «Gasolina 95 E5 · 1,529 €/l» y, si es el buscado, «Buscado».
+  function priceItem(price) {
+    const item = document.createElement('li');
+    item.className = price.searched ? 'detail-price-row searched' : 'detail-price-row';
+    const name = document.createElement('span');
+    name.className = 'fuel-name';
+    name.textContent = price.name;
+    const value = document.createElement('span');
+    value.className = 'fuel-price';
+    value.textContent = formatPrice(price.price, price.unit);
+    item.append(name, ' · ', value);
+    if (price.searched) {
+      const tag = document.createElement('span');
+      tag.className = 'searched-tag';
+      tag.textContent = 'Buscado';
+      item.append(' ', tag);
+    }
+    return item;
+  }
 
   function setExpanded(expanded) {
     panel.classList.toggle('expanded', expanded);
@@ -195,7 +254,8 @@ export function createView({onRetry, onRow, onCheapest, onCloseDetail}) {
       if (scroll && DESKTOP.matches) row.scrollIntoView({block: 'nearest'});
     },
 
-    // Ficha sencilla: hoja inferior en el móvil, en el panel en escritorio.
+    // Datos de la búsqueda en la ficha: hoja inferior en el móvil, en el panel
+    // en escritorio. Solo se reemplaza `#detail-head` (add-station-detail, D8).
     openDetail(station, unit) {
       const lines = [
         ['h2', 'detail-brand', station.brand || 'Sin rótulo'],
@@ -210,16 +270,73 @@ export function createView({onRetry, onRow, onCheapest, onCloseDetail}) {
         element.textContent = text;
         return element;
       });
-      $('detail-body').replaceChildren(...elements);
+      $('detail-head').replaceChildren(...elements);
       detail.hidden = false;
       document.body.classList.add('detail-open');
       $('detail-close').focus({preventScroll: true});
     },
 
     closeDetail() {
+      cancelDetailTimers();
       detail.hidden = true;
       document.body.classList.remove('detail-open');
-      $('detail-body').replaceChildren();
+      $('detail-head').replaceChildren();
+      detailStatus.textContent = '';
+      detailRetry.hidden = true;
+      $('detail-info').hidden = true;
+      $('detail-schedule').replaceChildren();
+      $('detail-prices').replaceChildren();
+    },
+
+    setDirections({href, label}) {
+      directions.href = href;
+      directions.setAttribute('aria-label', label);
+    },
+
+    // Estado del detalle (D8): la zona de estado solo lleva un texto corto, que
+    // se pone en el siguiente frame para que los lectores lo anuncien aunque la
+    // ficha acabe de mostrarse; horario y precios van fuera de esa zona.
+    // `onPainted` se llama tras ese frame, cuando la ficha ya tiene su alto.
+    renderDetail(entry, {newer = null, onPainted = () => {}} = {}) {
+      cancelDetailTimers();
+      let text;
+      if (entry.status === 'loading') text = 'Cargando horario…';
+      else if (entry.status === 'ok') text = 'Ficha cargada';
+      else text = errorText(entry.result);
+      statusFrame = requestAnimationFrame(() => {
+        detailStatus.textContent = text;
+        onPainted();
+      });
+
+      const retryable = entry.status === 'error' && entry.retryable;
+      detailRetry.hidden = !retryable;
+      const wait = retryable ? entry.retryAt - Date.now() : 0;
+      detailRetry.disabled = wait > 0;
+      if (wait > 0) {
+        detailRetryTimer = setTimeout(() => {
+          detailRetry.disabled = false;
+        }, wait);
+      }
+
+      const info = $('detail-info');
+      if (entry.status !== 'ok') {
+        info.hidden = true;
+        $('detail-schedule').replaceChildren();
+        $('detail-prices').replaceChildren();
+        return;
+      }
+      const {lines, prices} = entry.result;
+      if (newer) show($('detail-newer'), newer);
+      else hide($('detail-newer'));
+      $('detail-schedule').replaceChildren(...lines.map((line) => listItem('schedule-line', line)));
+      $('detail-no-schedule').hidden = lines.length > 0;
+      $('detail-prices').replaceChildren(...prices.map(priceItem));
+      $('detail-no-prices').hidden = prices.length > 0;
+      info.hidden = false;
+    },
+
+    focusDetailStatus() {
+      detailStatus.focus({preventScroll: true});
     },
 
     detailOpen() {

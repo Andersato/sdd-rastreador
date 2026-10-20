@@ -11,6 +11,16 @@ SPAIN_CORNERS = [(35.9, -9.4), (43.9, 4.4), (35.9, 4.4), (43.9, -9.4)]
 CLICK_HINT = "Pincha en el mapa para elegir dónde buscar"
 SEARCHING = "Buscando tu ubicación…"
 
+# Agentes de usuario fijos para los tests de «Cómo llegar» (add-station-detail, D11):
+# sin ellos, el Chromium de Playwright en un Mac dice «Macintosh».
+UA_LINUX_CHROME = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                   "Chrome/156.0.0.0 Safari/537.36")
+UA_MAC_SAFARI = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+                 "(KHTML, like Gecko) Version/26.0 Safari/605.1.15")
+# iPadOS se presenta como un Mac: «Macintosh» y sin «iPad».
+UA_IPADOS = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+             "(KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1")
+
 
 def seed_madrid(db):
     """Las estaciones del escenario «Búsqueda en Madrid» de prices-api, más dos

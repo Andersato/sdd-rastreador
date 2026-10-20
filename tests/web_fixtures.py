@@ -32,6 +32,9 @@ from tests.helpers import check_not_real_data, free_port
 FIXTURES = Path(__file__).parent / "fixtures" / "web"
 TILE_URL = re.compile(r"^https://tile\.openstreetmap\.org/(\d+)/(\d+)/(\d+)\.png$")
 HOST_RULES = "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"
+# Destinos de «Cómo llegar» (add-station-detail): solo los interceptan los tests que lo piden.
+DIRECTIONS_URL = re.compile(r"^https://(maps\.apple\.com/|www\.google\.com/maps/"
+                            r"|www\.openstreetmap\.org/directions)")
 
 # Ubicación simulada: sustituye `navigator.geolocation` por un objeto que
 # el test controla con `window.__geo` (conceder, denegar o no responder).
@@ -290,6 +293,24 @@ class WebPage:
         else:
             self.page.click(selector)
 
+    def intercept_directions(self):
+        """Pulsaciones de «Cómo llegar» sin abrir nada (add-station-detail, D11).
+
+        Las navegaciones a Apple Maps, Google Maps y las rutas de OpenStreetMap
+        se anotan en la lista devuelta (`url` y todas las cabeceras) y se
+        cancelan, sin pasar por la lista `blocked` de la guarda. Va en el
+        contexto porque `target="_blank"` abre otra página del mismo contexto,
+        y gana a la guarda por registrarse después.
+        """
+        seen = []
+
+        def handle(route):
+            seen.append({"url": route.request.url, "headers": route.request.all_headers()})
+            route.abort("blockedbyclient")
+
+        self.page.context.route(DIRECTIONS_URL, handle)
+        return seen
+
     def mock(self, path: str, *specs, hold: bool = False):
         """Responde `path` de la API con respuestas fijas, en orden; la última se
         repite. Cada `spec` es el nombre de un archivo de fixtures, un dict,
@@ -362,9 +383,12 @@ def open_page(guard_factory, web_server):
     `before_goto(web_page)` permite registrar respuestas fijas antes de cargar."""
 
     def open_(path="/", *, device="iphone", geo=None, viewport=None, timezone_id="Europe/Madrid",
-              clock=True, before_goto=None, init_scripts=(), server=None, goto=True):
+              clock=True, before_goto=None, init_scripts=(), server=None, goto=True,
+              user_agent=None):
         srv = server or web_server
         extra = {"viewport": viewport} if viewport else {}
+        if user_agent:
+            extra["user_agent"] = user_agent
         context, guard = guard_factory(srv.base, device, timezone_id=timezone_id, locale="es-ES",
                                        **extra)
         page = context.new_page()

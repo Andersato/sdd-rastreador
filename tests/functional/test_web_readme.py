@@ -40,7 +40,20 @@ def test_test_browsers():
 
 
 def test_ios_simulator(web):
-    """Escenario: Simulador de iOS."""
+    """Escenario: Simulador de iOS (con la ficha completa y «Cómo llegar», que abre
+    Apple Maps; cambia con add-station-detail, autorizado en su tarea 0.1)."""
     assert "Simulador de iOS" in web and "opcional" in web
     assert "http://127.0.0.1:8000/" in web and "Features → Location" in web
     assert "vertical y en horizontal" in web and "muesca" in web and "barra" in web
+    assert "horario" in web and "precios de todos sus combustibles" in web
+    assert "«Cómo llegar», que abre Apple Maps" in web
+
+
+def test_directions_privacy(web):
+    """Escenario: Privacidad de «Cómo llegar» (add-station-detail)."""
+    assert "Privacidad de «Cómo llegar»" in web
+    assert "Apple Maps" in web and "Google Maps" in web and "OpenStreetMap (el resto)" in web
+    assert "solo les envía las coordenadas de la gasolinera" in web.lower()
+    assert "nunca tu ubicación ni el punto pinchado" in web
+    assert "Solo ocurre al pulsarlo" in web
+    assert "puede usar su propia ubicación para calcular la ruta" in web
